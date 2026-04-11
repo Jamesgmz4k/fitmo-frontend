@@ -1,3 +1,4 @@
+import React from 'react';
 import { History, Trash2, Edit3, AlertTriangle, Lock, Zap, Utensils, Clock, Moon, X, ChevronRight, BarChart3, TrendingDown, MinusCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -7,7 +8,7 @@ interface HistoryFeedProps {
   isPro?: boolean; 
   onEdit: (workout: any) => void;
   onDelete: (id: number) => void;
-  getStatus: (exerciseName: string) => { label: string, color: string, bg: string, icon: JSX.Element };
+  getStatus: (exerciseName: string) => { label: string, color: string, bg: string, icon: React.ReactNode };
 }
 
   export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDelete, getStatus }: HistoryFeedProps) {
