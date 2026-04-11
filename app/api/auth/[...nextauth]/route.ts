@@ -21,7 +21,8 @@ const handler = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         try {
-          const res = await fetch("http://127.0.0.1:8000/api/login/", {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+          const res = await fetch(`${API_URL}/api/login/`, {
             method: 'POST',
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -58,7 +59,8 @@ const handler = NextAuth({
       // Si el usuario entra con Google, le avisamos a Django para que lo guarde
       if (account?.provider === "google") {
         try {
-          const res = await fetch("http://127.0.0.1:8000/api/google-login/", {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+          const res = await fetch(`${API_URL}/api/google-login/`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
