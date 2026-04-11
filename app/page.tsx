@@ -21,6 +21,7 @@ import HistoryFeed from '../components/dashboard/HistoryFeed';
 import HeatMapPaywall from '../components/dashboard/Paywall';
 import Paywall from '../components/dashboard/Paywall';
 import AuthForm from '../components/auth/AuthForm';
+
 const EXERCISES_DATABASE: Record<string, string[]> = {
   "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
   "Triceps": ["Jalón con polea barra recta", "Overhead extensions barra recta", "Press de triceps", "Skullcrushers", "Jalon con polea unilateral", "Fondos"],
@@ -34,6 +35,7 @@ const EXERCISES_DATABASE: Record<string, string[]> = {
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter(); 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
   
   // ==========================================
   // 1. ESTADOS (useState)
@@ -49,7 +51,7 @@ export default function Home() {
   // Catálogo Personalizado
   const [customExercises, setCustomExercises] = useState<Record<string, string[]>>({});
   
-  // Formulario de Entrenamiento (ESTOS ERAN LOS QUE FALTABAN)
+  // Formulario de Entrenamiento
   const [muscleGroup, setMuscleGroup] = useState('');
   const [exerciseType, setExerciseType] = useState('');
   const [weight, setWeight] = useState('');
@@ -59,8 +61,6 @@ export default function Home() {
   const [selectedAnalysisExercise, setSelectedAnalysisExercise] = useState<string>('');
   const [editingId, setEditingId] = useState<number | null>(null);
   
- 
-
   // ==========================================
   // 2. MEMORIAS (useMemo)
   // ==========================================
@@ -124,8 +124,8 @@ export default function Home() {
       const repsArray = repsMatch ? repsMatch[1].split(',').map(Number) : [];
       
       // NUEVA LÓGICA: Fitmo Hypertrophy Score
-const totalReps = repsArray.reduce((a: number, b: number) => a + b, 0);      
-const hypertrophyScore = (weightVal * 10) + totalReps;
+      const totalReps = repsArray.reduce((a: number, b: number) => a + b, 0);      
+      const hypertrophyScore = (weightVal * 10) + totalReps;
       
       return { cargaEfectiva: hypertrophyScore };
     }).filter(d => d.cargaEfectiva > 0);
@@ -140,8 +140,11 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
     }));
   }, [workouts, selectedAnalysisExercise, userId]);
 
+  // ==========================================
   // 3. EFECTOS (useEffect)
- useEffect(() => {
+  // ==========================================
+  
+  useEffect(() => {
     if (status === "authenticated") {
       setShowApp(true);
     }
@@ -149,7 +152,7 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
 
   const fetchData = async () => {
     try {
-      const resW = await fetch('http://127.0.0.1:8000/api/workouts/');      
+      const resW = await fetch(`${API_URL}/api/workouts/`);      
       if (resW.ok) setWorkouts(await resW.json());
     } catch (error) { console.error("Error fetching workouts:", error); }
   };
@@ -160,7 +163,7 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
       
       const checkOnboardingStatus = async () => {
         try {
-          const res = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
+          const res = await fetch(`${API_URL}/api/profile/?user_id=${userId}`);
           if (res.ok) {
             const profileData = await res.json();
             setIsPro(profileData.is_pro);
@@ -182,8 +185,12 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
       setSelectedAnalysisExercise(userExercises[0]);
     }
   }, [userExercises, selectedAnalysisExercise]);
-// 4. FUNCIONES DE MANEJO DE EVENTOS
-    const getStatus = (exName: string) => {
+
+  // ==========================================
+  // 4. FUNCIONES DE MANEJO DE EVENTOS
+  // ==========================================
+  
+  const getStatus = (exName: string) => {
     if (!userId) return { label: "Iniciando", color: "text-blue-400", bg: "bg-blue-500/10", icon: <Plus size={12}/> };
     
     const history = workouts
@@ -221,7 +228,8 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
     
     return { label: "Estable", color: "text-amber-400", bg: "bg-amber-500/10", icon: <Target size={12}/> };
   };
-    const handleEditInit = (workout: any) => {
+
+  const handleEditInit = (workout: any) => {
     const [mPart, remainder] = workout.title.split(':');
     const [ePart, wPart, rPart] = remainder.split('|');
     setMuscleGroup(mPart.trim());
@@ -239,13 +247,11 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
   const handleWorkoutSubmit = async (e: React.FormEvent, directData?: any) => {
     if (e) e.preventDefault();
     
-    // 1. Usamos los datos directos si existen, si no, usamos el estado de reserva
     const finalMuscle = directData?.muscleGroup || muscleGroup;
     const finalExercise = directData?.exerciseType || exerciseType;
     const finalWeight = directData?.weight || weight;
     const finalSets = directData?.sets || sets;
 
-    // 2. Validamos con las variables finales
     if (!finalMuscle || !finalExercise || !finalWeight || !userId) {
       alert("Faltan datos o la sesión no es válida.");
       return;
@@ -274,8 +280,8 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
     }
 
     const url = editingId 
-    ? `http://127.0.0.1:8000/api/workouts/${editingId}/` 
-      : 'http://127.0.0.1:8000/api/workouts/';
+      ? `${API_URL}/api/workouts/${editingId}/` 
+      : `${API_URL}/api/workouts/`;
       
     const method = editingId ? 'PUT' : 'POST';
 
@@ -299,35 +305,36 @@ const hypertrophyScore = (weightVal * 10) + totalReps;
     }
   };
 
- 
+  const handleAddCustomExercise = async (category: string, name: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/exercises/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, category: category })
+      });
+
+      if (res.ok) {
+        setCustomExercises(prev => ({ 
+          ...prev, 
+          [category]: [...(prev[category] || []), name] 
+        })); 
+        alert(`¡${name} guardado en tu base de datos!`);
+      }
+    } catch (error) {
+      console.error("Error al guardar catálogo:", error);
+    }
+  };
+
+  // ==========================================
   // 5. RENDERIZADO (UI)
+  // ==========================================
+  
   if (!showApp) return <Hero onEnterApp={() => setShowApp(true)} />;
   if (status === "unauthenticated" || status === "loading") {
     return <AuthForm />;
   }
- 
 
-  const handleAddCustomExercise = async (category: string, name: string) => {
-  try {
-    const res = await fetch('http://127.0.0.1:8000/api/exercises/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, category: category })
-    });
-
-    if (res.ok) {
-      setCustomExercises(prev => ({ 
-        ...prev, 
-        [category]: [...(prev[category] || []), name] 
-      })); 
-      alert(`¡${name} guardado en tu base de datos!`);
-    }
-  } catch (error) {
-    console.error("Error al guardar catálogo:", error);
-  }
-};
-
-return (
+  return (
     <main className="min-h-screen bg-[#050505] text-slate-200 p-4 md:p-10 font-sans">
       <div className="max-w-6xl mx-auto space-y-10">
         <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
@@ -343,14 +350,9 @@ return (
                 sessionsCount={sessionsCount}
                 progressPercent={progressPercent}
               />
-              
-
-  
-             
 
             <HeatMap isPro={isPro} />
                  
-
             <PersonalRecords records={personalRecords} />
 
             <WorkoutForm 
@@ -363,7 +365,6 @@ return (
                   setWeight('');
                   setSets([{ id: Date.now(), reps: '' }]);
                 }}
-                // AQUÍ ESTÁ LA MAGIA: Pasamos los datos directos al manejador
                 onSubmit={(formData) => {
                   handleWorkoutSubmit(null as any, formData);
                 }}
@@ -378,42 +379,39 @@ return (
             <ExerciseCatalog 
               databaseCategories={Object.keys(EXERCISES_DATABASE)} 
               onAddExercise={handleAddCustomExercise} 
-              
-/>
+            />
             <DashboardLayout isPro={isPro} userName={session?.user?.name}></DashboardLayout>
+          </div>
 
-      
-        </div>
           <div className="lg:col-span-7 space-y-8">
             <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
               <h2 className="text-slate-400 font-black mb-6 text-[10px] uppercase tracking-[0.2em]">Estado de tus Ejercicios</h2>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {userExercises.slice(0, 6).map(ex => {
-      const s = getStatus(ex); // <--- Ahora usa la función limpia que acabamos de crear
-      return (
-        <div key={ex} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center group hover:border-white/10 transition-all">
-          <span className="text-xs font-bold">{ex}</span>
-          <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${s.bg} ${s.color} text-[8px] font-black uppercase`}>{s.icon} {s.label}</div>
-        </div>
-      );
-    })}
-  </div>
-</section> 
-<HistoryFeed 
-isPro={isPro}
-  // Filtramos por tu usuario y ordenamos del más reciente al más antiguo
-  workouts={workouts.filter(w => w.user?.toString() === userId?.toString()).sort((a,b) => b.id - a.id)} 
-  onEdit={(workout) => {
-    handleEditInit(workout);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }}
-  onDelete={(id) => {
-    fetch(`http://127.0.0.1:8000/api/workouts/${id}/`, { method: 'DELETE' })
-      .then(() => fetchData());
-  }}
-  getStatus={getStatus}
-/>
+                    const s = getStatus(ex);
+                    return (
+                      <div key={ex} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center group hover:border-white/10 transition-all">
+                        <span className="text-xs font-bold">{ex}</span>
+                        <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${s.bg} ${s.color} text-[8px] font-black uppercase`}>{s.icon} {s.label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+            </section> 
 
+            <HistoryFeed 
+              isPro={isPro}
+              workouts={workouts.filter(w => w.user?.toString() === userId?.toString()).sort((a,b) => b.id - a.id)} 
+              onEdit={(workout) => {
+                handleEditInit(workout);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              onDelete={(id) => {
+                fetch(`${API_URL}/api/workouts/${id}/`, { method: 'DELETE' })
+                  .then(() => fetchData());
+              }}
+              getStatus={getStatus}
+            />
           </div>
         </div>
       </div>
