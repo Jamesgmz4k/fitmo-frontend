@@ -380,7 +380,7 @@ export default function Home() {
               databaseCategories={Object.keys(EXERCISES_DATABASE)} 
               onAddExercise={handleAddCustomExercise} 
             />
-            <DashboardLayout isPro={isPro} userName={session?.user?.name}></DashboardLayout>
+            <DashboardLayout isPro={isPro} userName={session?.user?.name}><div /></DashboardLayout>
           </div>
 
           <div className="lg:col-span-7 space-y-8">
