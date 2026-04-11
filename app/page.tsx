@@ -1,65 +1,422 @@
-import Image from "next/image";
+'use client';
+import DashboardHeader from '../components/dashboard/DashboardHeader';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState, useMemo } from 'react';
+import Hero from './Hero';
+import confetti from 'canvas-confetti';
+import { signIn, signOut, useSession } from "next-auth/react";
+import HeatMap from '../components/dashboard/HeatMap';
+import DashboardLayout from '../components/dashboard/DashboardLayout';
+import { 
+   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+} from 'recharts';
+import { 
+  Dumbbell, History, LogOut, Trash2, Edit3, ShieldCheck, User as UserIcon, Plus, Layers, AlertCircle, Lock, Zap, Flame, TrendingUp,  Target
+} from 'lucide-react';
+import PersonalRecords from '../components/dashboard/PersonalRecords';
+import ProgressionChart from '../components/dashboard/ProgressionChart';
+import ExerciseCatalog from '../components/dashboard/ExerciseCatalog';
+import WorkoutForm from '../components/dashboard/WorkoutForm';
+import HistoryFeed from '../components/dashboard/HistoryFeed';
+import HeatMapPaywall from '../components/dashboard/Paywall';
+import Paywall from '../components/dashboard/Paywall';
+import AuthForm from '../components/auth/AuthForm';
+const EXERCISES_DATABASE: Record<string, string[]> = {
+  "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
+  "Triceps": ["Jalón con polea barra recta", "Overhead extensions barra recta", "Press de triceps", "Skullcrushers", "Jalon con polea unilateral", "Fondos"],
+  "Bicep": ["Curl mancuernas", "Curl barra z", "Martillos", "Curl en polea barra recta", "Curl en maquina", "Curl predicador", "Curl concentrado", "Bayessian", "Curl en banco inclinado con mancuernas", "Spider curl"],
+  "Espalda": ["Remo en smith", "Remo sentado en maquina", "Remo con triquete abierto", "Pulldown agarre abierto", "Pulldown vertical", "Pullover con barra recta", "Pulldown agarre V", "Dominadas abiertas", "Dominadas cerradas", "Pulldown agarre neutro"],
+  "Pierna": ["Sentadilla regular", "Sentadilla cerrada", "Abductor abrir", "Abductor cerrar", "Desplantes en smith", "Curl de cuadricep en maquina", "Femoral acostado", "Femoral sentado", "Hip trust", "Prensa"],
+  "Abdomen": ["Crunches banco inclinado", "Twist ruso", "Aplastamiento de abdomen", "Elevaciones de piernas", "Plancha"],
+  "Hombro": ["Press militar", "Laterales", "Frontales"]
+};
 
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+  const { data: session, status } = useSession();
+  const router = useRouter(); 
+  
+  // ==========================================
+  // 1. ESTADOS (useState)
+  // ==========================================
+  
+  // Control de la aplicación
+  const [showApp, setShowApp] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  
+  // Datos principales
+  const [workouts, setWorkouts] = useState<any[]>([]);
+  
+  // Catálogo Personalizado
+  const [customExercises, setCustomExercises] = useState<Record<string, string[]>>({});
+  
+  // Formulario de Entrenamiento (ESTOS ERAN LOS QUE FALTABAN)
+  const [muscleGroup, setMuscleGroup] = useState('');
+  const [exerciseType, setExerciseType] = useState('');
+  const [weight, setWeight] = useState('');
+  const [sets, setSets] = useState([{ id: 1, reps: '' }]);
+  
+  // UI y Análisis
+  const [selectedAnalysisExercise, setSelectedAnalysisExercise] = useState<string>('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  
+ 
+
+  // ==========================================
+  // 2. MEMORIAS (useMemo)
+  // ==========================================
+  
+  const userId = useMemo(() => (session?.user as any)?.id, [session]);
+
+  const ALL_EXERCISES = useMemo(() => {
+    const combined = { ...EXERCISES_DATABASE };
+    Object.keys(customExercises).forEach(muscle => {
+      combined[muscle] = [...(combined[muscle] || []), ...customExercises[muscle]];
+    });
+    return combined;
+  }, [customExercises]);
+
+  const userExercises = useMemo(() => {
+    if (!workouts || !userId) return [];
+    const names = workouts
+      .filter(w => w.user?.toString() === userId?.toString())
+      .map(w => w.title.split(':')[1]?.split('|')[0]?.trim());
+    return Array.from(new Set(names)).filter(Boolean) as string[];
+  }, [workouts, userId]);
+
+  const personalRecords = useMemo(() => {
+    if (!userId) return [];
+    
+    const userLogs = workouts.filter(w => w.user?.toString() === userId.toString());
+    const recordsMap: Record<string, number> = {};
+    
+    userLogs.forEach(log => {
+      const exName = log.title.split(':')[1]?.split('|')[0]?.trim();
+      const weightMatch = log.title.match(/(\d+)kg/);
+      const weightVal = weightMatch ? parseInt(weightMatch[1]) : 0;
+      if (exName && (!recordsMap[exName] || weightVal > recordsMap[exName])) {
+        recordsMap[exName] = weightVal;
+      }
+    });
+    
+    return Object.entries(recordsMap).map(([name, weight]) => ({ name, weight }));
+  }, [workouts, userId]);
+
+  const sessionsCount = useMemo(() => {
+    if (!selectedAnalysisExercise) return 0;
+    return workouts.filter(w => w.title.includes(selectedAnalysisExercise)).length;
+  }, [workouts, selectedAnalysisExercise]);
+
+  const progressPercent = Math.min((sessionsCount / 3) * 100, 100);
+
+  const chartData = useMemo(() => {
+    if (!isPro) return [];
+    if (!selectedAnalysisExercise || !userId) return [];
+    
+    const exerciseLogs = workouts.filter(w => 
+      w.user?.toString() === userId?.toString() && 
+      w.title.includes(selectedAnalysisExercise)
+    ).reverse();    
+
+    const sessionData = exerciseLogs.map(w => {
+      const weightMatch = w.title.match(/(\d+)kg/);
+      const repsMatch = w.title.match(/Reps:\s*(.+)/);
+      const weightVal = weightMatch ? parseInt(weightMatch[1]) : 0;
+      const repsArray = repsMatch ? repsMatch[1].split(',').map(Number) : [];
+      
+      // NUEVA LÓGICA: Fitmo Hypertrophy Score
+      const totalReps = repsArray.reduce((a, b) => a + b, 0);
+      const hypertrophyScore = (weightVal * 10) + totalReps;
+      
+      return { cargaEfectiva: hypertrophyScore };
+    }).filter(d => d.cargaEfectiva > 0);
+
+    if (sessionData.length < 2) return []; 
+    
+    const baseline = sessionData[0].cargaEfectiva; 
+    
+    return sessionData.map((s, i) => ({
+      session: `S${i + 1}`,
+      ip: parseFloat(((s.cargaEfectiva / baseline) * 100).toFixed(1))
+    }));
+  }, [workouts, selectedAnalysisExercise, userId]);
+
+  // 3. EFECTOS (useEffect)
+ useEffect(() => {
+    if (status === "authenticated") {
+      setShowApp(true);
+    }
+  }, [status]);
+
+  const fetchData = async () => {
+    try {
+      const resW = await fetch('http://127.0.0.1:8000/api/workouts/');      
+      if (resW.ok) setWorkouts(await resW.json());
+    } catch (error) { console.error("Error fetching workouts:", error); }
+  };
+
+  useEffect(() => { 
+    if (status === "authenticated" && userId && showApp) {
+      fetchData(); 
+      
+      const checkOnboardingStatus = async () => {
+        try {
+          const res = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
+          if (res.ok) {
+            const profileData = await res.json();
+            setIsPro(profileData.is_pro);
+            if (!profileData.is_onboarded) {
+              router.push('/onboarding');
+            }
+          }
+        } catch (error) {
+          console.error("Error al validar estatus de onboarding:", error);
+        }
+      };
+
+      checkOnboardingStatus();
+    } 
+  }, [status, userId, router, showApp]);
+
+  useEffect(() => {
+    if (userExercises.length > 0 && !selectedAnalysisExercise) {
+      setSelectedAnalysisExercise(userExercises[0]);
+    }
+  }, [userExercises, selectedAnalysisExercise]);
+// 4. FUNCIONES DE MANEJO DE EVENTOS
+    const getStatus = (exName: string) => {
+    if (!userId) return { label: "Iniciando", color: "text-blue-400", bg: "bg-blue-500/10", icon: <Plus size={12}/> };
+    
+    const history = workouts
+      .filter(w => w.user?.toString() === userId?.toString() && w.title.includes(exName))
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 3);
+
+    if (history.length < 2) return { label: "Iniciando", color: "text-blue-400", bg: "bg-blue-500/10", icon: <Plus size={12}/> };
+
+    const getProgressionScore = (t: string) => {
+      const wMatch = t.match(/(\d+)kg/);
+      const w = wMatch ? parseInt(wMatch[1]) : 0;
+      
+      const rsMatch = t.match(/Reps:\s*(.+)/);
+      const reps = rsMatch ? rsMatch[1].split(',').map(Number) : [];
+      
+      // Mismo Score de Hipertrofia para que coincida con la gráfica
+      const totalReps = reps.reduce((a, r) => a + r, 0);
+      return (w * 10) + totalReps;
+    };
+
+    const currentScore = getProgressionScore(history[0].title);
+    const previousScore = getProgressionScore(history[1].title);
+
+    const ratio = previousScore > 0 ? currentScore / previousScore : 1;
+
+    if (ratio > 1.01) return { label: "Progresando", color: "text-emerald-400", bg: "bg-emerald-500/10", icon: <TrendingUp size={12}/> };
+    
+    if (ratio < 0.99 && history.length === 3) {
+      const oldestScore = getProgressionScore(history[2].title);
+      if (previousScore < oldestScore) {
+        return { label: "Estancado", color: "text-red-400", bg: "bg-red-500/10", icon: <AlertCircle size={12}/> };
+      }
+    }
+    
+    return { label: "Estable", color: "text-amber-400", bg: "bg-amber-500/10", icon: <Target size={12}/> };
+  };
+    const handleEditInit = (workout: any) => {
+    const [mPart, remainder] = workout.title.split(':');
+    const [ePart, wPart, rPart] = remainder.split('|');
+    setMuscleGroup(mPart.trim());
+    setExerciseType(ePart.trim());
+    setWeight(wPart.replace('kg', '').trim());
+    const repsArr = rPart.replace('Reps:', '').trim().split(',').map((r: string, i: number) => ({
+      id: i + 1,
+      reps: r.trim()
+    }));
+    setSets(repsArr);
+    setEditingId(workout.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleWorkoutSubmit = async (e: React.FormEvent, directData?: any) => {
+    if (e) e.preventDefault();
+    
+    // 1. Usamos los datos directos si existen, si no, usamos el estado de reserva
+    const finalMuscle = directData?.muscleGroup || muscleGroup;
+    const finalExercise = directData?.exerciseType || exerciseType;
+    const finalWeight = directData?.weight || weight;
+    const finalSets = directData?.sets || sets;
+
+    // 2. Validamos con las variables finales
+    if (!finalMuscle || !finalExercise || !finalWeight || !userId) {
+      alert("Faltan datos o la sesión no es válida.");
+      return;
+    }
+
+    const repsString = finalSets.map((s: any) => s.reps).join(',');
+    const fullTitle = `${finalMuscle}: ${finalExercise} | ${finalWeight}kg | Reps: ${repsString}`;
+    
+    const exerciseHistory = workouts.filter(w => 
+      w.user?.toString() === userId.toString() && 
+      w.title.includes(finalExercise)
+    );
+
+    const maxWeightHistory = Math.max(...exerciseHistory.map(w => {
+      const match = w.title.match(/(\d+)kg/);
+      return match ? parseInt(match[1]) : 0;
+    }), 0);
+
+    if (parseInt(finalWeight) > maxWeightHistory && exerciseHistory.length > 0) {
+      confetti({ 
+        particleCount: 150, 
+        spread: 70, 
+        origin: { y: 0.6 },
+        colors: ['#8b5cf6', '#22d3ee'] 
+      });
+    }
+
+    const url = editingId 
+    ? `http://127.0.0.1:8000/api/workouts/${editingId}/` 
+      : 'http://127.0.0.1:8000/api/workouts/';
+      
+    const method = editingId ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        title: fullTitle, 
+        user: parseInt(userId) 
+      }),
+    });
+
+    if (res.ok) {
+      setMuscleGroup(''); setExerciseType(''); setWeight(''); setSets([{ id: 1, reps: '' }]);
+      setEditingId(null);
+      fetchData(); 
+    } else {
+      const errorData = await res.json();
+      console.error("Error de Django:", errorData);
+      alert("Error al guardar el entrenamiento. Revisa la consola.");
+    }
+  };
+
+ 
+  // 5. RENDERIZADO (UI)
+  if (!showApp) return <Hero onEnterApp={() => setShowApp(true)} />;
+  if (status === "unauthenticated" || status === "loading") {
+    return <AuthForm />;
+  }
+ 
+
+  const handleAddCustomExercise = async (category: string, name: string) => {
+  try {
+    const res = await fetch('http://127.0.0.1:8000/api/exercises/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, category: category })
+    });
+
+    if (res.ok) {
+      setCustomExercises(prev => ({ 
+        ...prev, 
+        [category]: [...(prev[category] || []), name] 
+      })); 
+      alert(`¡${name} guardado en tu base de datos!`);
+    }
+  } catch (error) {
+    console.error("Error al guardar catálogo:", error);
+  }
+};
+
+return (
+    <main className="min-h-screen bg-[#050505] text-slate-200 p-4 md:p-10 font-sans">
+      <div className="max-w-6xl mx-auto space-y-10">
+        <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
+        <div className="grid lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-5 space-y-8">
+          
+            <ProgressionChart
+                isPro={isPro} 
+                exercises={userExercises}
+                selectedExercise={selectedAnalysisExercise}
+                onExerciseChange={setSelectedAnalysisExercise}
+                data={chartData}
+                sessionsCount={sessionsCount}
+                progressPercent={progressPercent}
+              />
+              
+
+  
+             
+
+            <HeatMap isPro={isPro} />
+                 
+
+            <PersonalRecords records={personalRecords} />
+
+            <WorkoutForm 
+                exercisesDatabase={ALL_EXERCISES} 
+                editingId={editingId}
+                onCancelEdit={() => {
+                  setEditingId(null);
+                  setMuscleGroup('');
+                  setExerciseType('');
+                  setWeight('');
+                  setSets([{ id: Date.now(), reps: '' }]);
+                }}
+                // AQUÍ ESTÁ LA MAGIA: Pasamos los datos directos al manejador
+                onSubmit={(formData) => {
+                  handleWorkoutSubmit(null as any, formData);
+                }}
+                initialData={{
+                  muscle: muscleGroup,
+                  exercise: exerciseType,
+                  weight: weight,
+                  sets: sets
+                }}
+              />
+
+            <ExerciseCatalog 
+              databaseCategories={Object.keys(EXERCISES_DATABASE)} 
+              onAddExercise={handleAddCustomExercise} 
+              
+/>
+            <DashboardLayout isPro={isPro} userName={session?.user?.name}></DashboardLayout>
+
+      
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          <div className="lg:col-span-7 space-y-8">
+            <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
+              <h2 className="text-slate-400 font-black mb-6 text-[10px] uppercase tracking-[0.2em]">Estado de tus Ejercicios</h2>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {userExercises.slice(0, 6).map(ex => {
+      const s = getStatus(ex); // <--- Ahora usa la función limpia que acabamos de crear
+      return (
+        <div key={ex} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center group hover:border-white/10 transition-all">
+          <span className="text-xs font-bold">{ex}</span>
+          <div className={`flex items-center gap-1 px-3 py-1 rounded-full ${s.bg} ${s.color} text-[8px] font-black uppercase`}>{s.icon} {s.label}</div>
         </div>
-      </main>
-    </div>
+      );
+    })}
+  </div>
+</section> 
+<HistoryFeed 
+isPro={isPro}
+  // Filtramos por tu usuario y ordenamos del más reciente al más antiguo
+  workouts={workouts.filter(w => w.user?.toString() === userId?.toString()).sort((a,b) => b.id - a.id)} 
+  onEdit={(workout) => {
+    handleEditInit(workout);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }}
+  onDelete={(id) => {
+    fetch(`http://127.0.0.1:8000/api/workouts/${id}/`, { method: 'DELETE' })
+      .then(() => fetchData());
+  }}
+  getStatus={getStatus}
+/>
+
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }

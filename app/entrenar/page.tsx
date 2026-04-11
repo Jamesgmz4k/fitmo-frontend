@@ -1,0 +1,532 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import DashboardLayout from '../../components/dashboard/DashboardLayout';
+import DashboardHeader from '../../components/dashboard/DashboardHeader';
+import { useSession, signOut } from 'next-auth/react';
+import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy } from 'lucide-react';
+import confetti from 'canvas-confetti';
+
+const EXERCISES_DATABASE: Record<string, string[]> = {
+  "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
+  "Triceps": ["Jalón con polea barra recta", "Overhead extensions barra recta", "Press de triceps", "Skullcrushers", "Jalon con polea unilateral", "Fondos"],
+  "Bicep": ["Curl mancuernas", "Curl barra z", "Martillos", "Curl en polea barra recta", "Curl en maquina", "Curl predicador", "Curl concentrado", "Bayessian", "Curl en banco inclinado con mancuernas", "Spider curl"],
+  "Espalda": ["Remo en smith", "Remo sentado en maquina", "Remo con triquete abierto", "Pulldown agarre abierto", "Pulldown vertical", "Pullover con barra recta", "Pulldown agarre V", "Dominadas abiertas", "Dominadas cerradas", "Pulldown agarre neutro"],
+  "Pierna": ["Sentadilla regular", "Sentadilla cerrada", "Abductor abrir", "Abductor cerrar", "Desplantes en smith", "Curl de cuadricep en maquina", "Femoral acostado", "Femoral sentado", "Hip trust", "Prensa"],
+  "Abdomen": ["Crunches banco inclinado", "Twist ruso", "Aplastamiento de abdomen", "Elevaciones de piernas", "Plancha"],
+  "Hombro": ["Press militar", "Laterales", "Frontales"]
+};
+
+export default function EntrenarPage() {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id;
+
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [prediction, setPrediction] = useState<any>(null);
+  const [workouts, setWorkouts] = useState<any[]>([]); // Para el historial
+  
+  // --- Estados de Edición/Creación ---
+  const [isBuilding, setIsBuilding] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [templateName, setTemplateName] = useState('');
+  const [builderExercises, setBuilderExercises] = useState([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
+  const [isPro, setIsPro] = useState(false);
+
+  // --- Estados de ENTRENAMIENTO EN VIVO ---
+  const [activeTemplate, setActiveTemplate] = useState<any>(null);
+  const [workoutData, setWorkoutData] = useState<Record<number, {weights: string[], reps: string[], completed: boolean[], previous: any}>>({});
+  const [isSavingWorkout, setIsSavingWorkout] = useState(false);
+  const [unit, setUnit] = useState<'kg' | 'lbs'>('kg'); 
+  const [showSuccessModal, setShowSuccessModal] = useState(false); // Modal de Confetti
+  
+  // Estado del Cronómetro
+  const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number } | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (activeTimer && activeTimer.timeLeft > 0) {
+      interval = setInterval(() => {
+        setActiveTimer(prev => prev ? { ...prev, timeLeft: prev.timeLeft - 1 } : null);
+      }, 1000);
+    } else if (activeTimer && activeTimer.timeLeft === 0) {
+      setActiveTimer(null);
+    }
+    return () => clearInterval(interval);
+  }, [activeTimer]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const fetchData = async () => {
+    if (!userId) return;
+    try {
+      const resTemplates = await fetch(`http://127.0.0.1:8000/api/templates/?user_id=${userId}`);
+      if (resTemplates.ok) setTemplates(await resTemplates.json());
+      
+      const resPrediction = await fetch(`http://127.0.0.1:8000/api/predict-workout/?user_id=${userId}`);
+      if (resPrediction.ok) setPrediction(await resPrediction.json());
+
+      // Traemos el historial para calcular el "Anterior"
+      const resWorkouts = await fetch('http://127.0.0.1:8000/api/workouts/');
+      if (resWorkouts.ok) setWorkouts(await resWorkouts.json());
+
+      const resProfile = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
+    if (resProfile.ok) {
+      const profileData = await resProfile.json();
+      setIsPro(profileData.is_pro);
+    }
+
+    } catch (error) { console.error("Error cargando:", error); }
+  };
+
+  useEffect(() => { fetchData(); }, [userId]);
+
+  // Busca la última marca de este usuario para un ejercicio específico
+  const getLastPerformance = (exerciseName: string) => {
+    const userLogs = workouts.filter(w => w.user?.toString() === userId?.toString() && w.title.includes(exerciseName));
+    if (userLogs.length === 0) return null;
+    
+    userLogs.sort((a,b) => b.id - a.id); // El más reciente
+    const last = userLogs[0];
+    
+    const weightMatch = last.title.match(/(\d+(?:\.\d+)?)\s*(kg|lbs)/i);
+    const w = weightMatch ? parseFloat(weightMatch[1]) : 0;
+    
+    const repsMatch = last.title.match(/Reps:\s*(.+)/);
+    const reps = repsMatch ? repsMatch[1].split(',').map((r: string) => parseInt(r.trim())) : [];
+    
+    return { weight: w, reps };
+  };
+
+  // --- LÓGICA CRUD TEMPLATES ---
+  const handleSaveTemplate = async () => {
+    if (!templateName || builderExercises.some(e => !e.name || !e.category)) {
+      alert("Por favor completa el nombre de la rutina y selecciona todos los ejercicios.");
+      return;
+    }
+    try {
+      const payload = {
+        user_id: userId,
+        name: templateName,
+        exercises: builderExercises.map(e => ({
+          category: e.category, name: e.name, target_sets: e.sets, target_reps: e.reps, rest_time: e.rest_time
+        }))
+      };
+      const url = editingTemplateId ? `http://127.0.0.1:8000/api/templates/${editingTemplateId}/` : 'http://127.0.0.1:8000/api/templates/';
+      const res = await fetch(url, { method: editingTemplateId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (res.ok) {
+        setIsBuilding(false); setEditingTemplateId(null); setTemplateName('');
+        setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
+        fetchData();
+      }
+    } catch (error) { console.error("Error guardando:", error); }
+  };
+
+  const handleEditInit = (template: any) => {
+    setTemplateName(template.name);
+    setBuilderExercises(template.exercises.map((ex: any, idx: number) => ({
+      id: Date.now() + idx, category: ex.category, name: ex.exercise_name, sets: ex.target_sets, reps: ex.target_reps, rest_time: ex.rest_time || 90
+    })));
+    setEditingTemplateId(template.id); setIsBuilding(true); window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteTemplate = async (id: number) => {
+    if (!confirm("¿Seguro que quieres eliminar esta rutina?")) return;
+    const res = await fetch(`http://127.0.0.1:8000/api/templates/${id}/`, { method: 'DELETE' });
+    if (res.ok) fetchData();
+  };
+
+  // --- LÓGICA ENTRENAMIENTO EN VIVO ---
+  const startWorkout = (template: any) => {
+    setActiveTemplate(template);
+    const initialData: Record<number, any> = {};
+    
+    template.exercises.forEach((ex: any, idx: number) => {
+      const prevData = getLastPerformance(ex.exercise_name); // Calculamos su marca anterior
+
+      initialData[idx] = {
+        weights: Array(ex.target_sets).fill(''),
+        reps: Array(ex.target_sets).fill(ex.target_reps),
+        completed: Array(ex.target_sets).fill(false),
+        previous: prevData // Se lo pasamos a la tabla
+      };
+    });
+    setWorkoutData(initialData);
+    setActiveTimer(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const toggleSetComplete = (exIdx: number, setIdx: number, restTime: number) => {
+    const newData = {...workoutData};
+    const isNowCompleted = !newData[exIdx].completed[setIdx];
+    newData[exIdx].completed[setIdx] = isNowCompleted;
+    setWorkoutData(newData);
+
+    if (isNowCompleted) {
+      setActiveTimer({ exerciseIdx: exIdx, setIdx: setIdx, timeLeft: restTime, totalTime: restTime });
+    } else {
+      if (activeTimer?.exerciseIdx === exIdx && activeTimer?.setIdx === setIdx) {
+        setActiveTimer(null);
+      }
+    }
+  };
+
+ const finishWorkout = async () => {
+    setIsSavingWorkout(true);
+    let hasNewRecord = false;
+
+    try {
+      for (let i = 0; i < activeTemplate.exercises.length; i++) {
+        const ex = activeTemplate.exercises[i];
+        const data = workoutData[i];
+        
+        const validSets = data.completed.map((isDone: boolean, idx: number) => isDone ? { weight: parseFloat(data.weights[idx]) || 0, rep: data.reps[idx] } : null).filter(Boolean) as {weight: number, rep: string}[];
+        
+        if (validSets.length === 0) continue; 
+        
+        const currentMaxWeight = Math.max(...validSets.map(s => s.weight));
+        // Sumamos todas las reps para enviarlas como un solo número entero (Integer) a Django
+        const currentTotalReps = validSets.reduce((acc, s) => acc + parseInt(s.rep), 0);
+        
+        let weightInKg = currentMaxWeight;
+        if (unit === 'lbs') {
+          weightInKg = Math.round(currentMaxWeight / 2.20462); 
+        }
+
+        if (data.previous) {
+            const prevTotalReps = data.previous.reps.reduce((a: number, b: number) => a + b, 0);
+            if (weightInKg > data.previous.weight || (weightInKg === data.previous.weight && currentTotalReps > prevTotalReps)) {
+                hasNewRecord = true;
+            }
+        }
+
+        const repsString = validSets.map(s => s.rep).join(', ');
+        const fullTitle = `${ex.category}: ${ex.exercise_name} | ${weightInKg}kg | Reps: ${repsString}`;
+        
+        // Enviamos el payload blindado con todos los datos que tu models.py exige
+        const res = await fetch('http://127.0.0.1:8000/api/workouts/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            title: fullTitle, 
+            user: parseInt(userId),
+            user_id: parseInt(userId), // Por si DRF lo pide como user_id
+            weight: weightInKg,        // Float para tu base de datos
+            reps: currentTotalReps     // Integer para tu base de datos
+          })
+        });
+
+        // Agregamos la alerta para que NUNCA vuelva a fallar en silencio
+        if (!res.ok) {
+          const errorData = await res.json();
+          console.error("❌ Django rechazó el registro:", errorData);
+          alert("Error al guardar en la base de datos. Revisa la consola del navegador.");
+        }
+      }
+
+      if (hasNewRecord) {
+         confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, colors: ['#8b5cf6', '#22d3ee', '#10b981'] });
+         setShowSuccessModal(true);
+      } else {
+         setActiveTemplate(null);
+         fetchData(); 
+      }
+      
+    } catch (error) { 
+      console.error("Error de red guardando sesión:", error); 
+    } finally { 
+      setIsSavingWorkout(false); 
+    }
+  };
+
+
+  // ==========================================
+  // RENDER: MODO ENTRENAMIENTO EN VIVO
+  // ==========================================
+  if (activeTemplate) {
+    return (
+      <DashboardLayout userName={session?.user?.name}>
+        
+        {/* MODAL DE ÉXITO (PR ROTO) */}
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/90 backdrop-blur-sm p-4">
+            <div className="bg-[#0a0a0a] border border-cyan-500/30 p-10 rounded-[3rem] text-center max-w-sm shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in-95">
+              <div className="w-24 h-24 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-cyan-500/20">
+                <Trophy size={48} className="text-cyan-400" />
+              </div>
+              <h2 className="text-3xl font-black italic text-white mb-2 uppercase tracking-tighter">¡Felicidades!</h2>
+              <p className="text-slate-400 text-sm mb-8 font-medium leading-relaxed">
+                ¡Tu fuerza aumentó! Has superado tu marca anterior. Sigue aplicando sobrecarga progresiva.
+              </p>
+              <button
+                onClick={() => { setShowSuccessModal(false); setActiveTemplate(null); fetchData(); }}
+                className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:scale-105 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 md:p-10 font-sans text-slate-200 min-h-screen">
+          <div className="max-w-3xl mx-auto space-y-6">
+            
+            <div className="flex items-center justify-between">
+              <button onClick={() => setActiveTemplate(null)} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-black uppercase tracking-widest">
+                <ChevronLeft size={16} /> Abandonar Sesión
+              </button>
+              
+              <select 
+                className="bg-[#050505] border border-white/10 px-4 py-2 rounded-xl text-xs font-black text-cyan-400 uppercase outline-none cursor-pointer"
+                value={unit} onChange={(e) => setUnit(e.target.value as 'kg' | 'lbs')}
+              >
+                <option value="kg">Kilos (KG)</option>
+                <option value="lbs">Libras (LBS)</option>
+              </select>
+            </div>
+
+            <div className="bg-[#0a0a0a] border border-white/5 px-6 py-8 rounded-[2rem] shadow-xl relative overflow-hidden">
+              <div className="flex items-center gap-2 text-cyan-400 mb-2">
+                 <Timer size={16} className={activeTimer ? "animate-pulse" : ""} />
+                 <span className="text-[10px] font-black uppercase tracking-widest">{activeTimer ? 'Descansando...' : 'Sesión Activa'}</span>
+              </div>
+              <h1 className="text-3xl font-black italic text-white tracking-tighter">{activeTemplate.name}</h1>
+            </div>
+
+            <div className="space-y-6">
+              {activeTemplate.exercises.map((ex: any, idx: number) => (
+                <div key={ex.id} className="bg-[#050505] border border-white/5 p-4 md:p-6 rounded-[2rem] shadow-lg">
+                  <div className="mb-4">
+                      <h3 className="text-lg font-black italic text-cyan-400 uppercase">{ex.exercise_name}</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{ex.category}</p>
+                  </div>
+
+                  {/* CABECERA DE LA TABLA */}
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 px-2">
+                     <div className="w-8 text-center">Set</div>
+                     <div className="flex-1 text-center hidden md:block">Anterior</div>
+                     <div className="w-16 text-center">{unit}</div>
+                     <div className="w-16 text-center">Reps</div>
+                     <div className="w-10 text-center"><Check size={14} className="mx-auto"/></div>
+                  </div>
+
+                  {/* FILAS DE SERIES */}
+                  <div className="space-y-2">
+                    {workoutData[idx]?.weights.map((_, setIdx) => {
+                      const isCompleted = workoutData[idx].completed[setIdx];
+                      const isTimerActive = activeTimer?.exerciseIdx === idx && activeTimer?.setIdx === setIdx;
+                      
+                      // Extraer el log anterior para pintarlo difuminado
+                      const prevLog = workoutData[idx].previous;
+                      const prevText = (prevLog && prevLog.reps[setIdx]) ? `${prevLog.weight} x ${prevLog.reps[setIdx]}` : '-';
+
+                      return (
+                        <div key={setIdx}>
+                          <div className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isCompleted ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white/[0.02] border-white/5'}`}>
+                            
+                            <div className="w-8 text-center font-black text-slate-400 text-sm">
+                              {setIdx + 1}
+                            </div>
+                            
+                            {/* COLUMNA ANTERIOR (EL EFECTO FANTASMA) */}
+                            <div className="flex-1 text-center text-slate-500/40 text-[11px] font-black tracking-widest hidden md:block select-none">
+                              {prevText}
+                            </div>
+                            
+                            <input 
+                              type="number" 
+                              placeholder="0"
+                              value={workoutData[idx].weights[setIdx]}
+                              onChange={(e) => {
+                                const newData = {...workoutData};
+                                newData[idx].weights[setIdx] = e.target.value;
+                                setWorkoutData(newData);
+                              }}
+                              className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
+                              disabled={isCompleted} 
+                            />
+                            
+                            <input 
+                              type="number" 
+                              value={workoutData[idx].reps[setIdx]}
+                              onChange={(e) => {
+                                const newData = {...workoutData};
+                                newData[idx].reps[setIdx] = e.target.value;
+                                setWorkoutData(newData);
+                              }}
+                              className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
+                              disabled={isCompleted}
+                            />
+                            
+                            {/* BOTÓN DE PALOMITA */}
+                            <div className="w-10 flex justify-center">
+                              <button 
+                                onClick={() => toggleSetComplete(idx, setIdx, ex.rest_time || 90)}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isCompleted ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}
+                              >
+                                <Check size={16} strokeWidth={4} />
+                              </button>
+                            </div>
+
+                          </div>
+
+                          {/* BARRA AZUL DEL CRONÓMETRO */}
+                          {isTimerActive && (
+                            <div className="mt-2 h-10 w-full bg-[#0a0a0a] rounded-xl border border-cyan-500/20 relative overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.1)]">
+                               <div 
+                                 className="absolute left-0 top-0 h-full bg-cyan-500/80 transition-all duration-1000 ease-linear" 
+                                 style={{ width: `${(activeTimer.timeLeft / activeTimer.totalTime) * 100}%` }}
+                               ></div>
+                               <span className="relative z-10 font-black text-white text-sm tracking-widest">{formatTime(activeTimer.timeLeft)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <button 
+                    onClick={() => {
+                       const newData = {...workoutData};
+                       newData[idx].weights.push('');
+                       newData[idx].reps.push(ex.target_reps);
+                       newData[idx].completed.push(false);
+                       setWorkoutData(newData);
+                    }}
+                    className="mt-4 w-full py-3 bg-white/[0.02] hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 transition-colors"
+                  >
+                    + Añadir Serie
+                  </button>
+
+                </div>
+              ))}
+            </div>
+
+            <button 
+              onClick={finishWorkout}
+              disabled={isSavingWorkout}
+              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white p-6 rounded-[2rem] font-black text-sm uppercase tracking-widest transition-all shadow-[0_0_40px_rgba(34,211,238,0.2)] flex justify-center items-center gap-3 disabled:opacity-50"
+            >
+              {isSavingWorkout ? 'Procesando...' : <><CheckCircle2 size={24} /> Finalizar Sesión</>}
+            </button>
+
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+
+  // ==========================================
+  // RENDER: DASHBOARD DE TEMPLATES Y CONSTRUCTOR
+  // ==========================================
+  return (
+    <DashboardLayout userName={session?.user?.name}>
+      <div className="p-4 md:p-10 font-sans text-slate-200 min-h-screen">
+        <div className="max-w-5xl mx-auto space-y-10">
+          <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/[0.02] p-6 rounded-3xl border border-white/5 shadow-xl gap-4">
+            <div>
+              <h1 className="text-2xl font-black italic uppercase text-white tracking-tighter flex items-center gap-2">
+                Entrenamiento <span className="text-cyan-500">En Vivo</span> <Activity className="text-cyan-400" size={24} />
+              </h1>
+            </div>
+            <button 
+  onClick={() => { 
+    // LA REGLA DE NEGOCIO DEL MVP:
+    if (!isPro && templates.length >= 3 && !isBuilding) {
+      alert("🔒 Límite de la cuenta Free alcanzado.\n\nActualmente tienes 3 templates guardados. Para crear rutinas ilimitadas y desbloquear el análisis avanzado, actualiza a Fitmo Pro.");
+      return; // Detenemos la ejecución aquí
+    }
+
+    setIsBuilding(!isBuilding); 
+    if (isBuilding) { 
+      setEditingTemplateId(null); 
+      setTemplateName(''); 
+      setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]); 
+    } 
+  }}
+  className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
+>
+  {isBuilding ? <X size={16} /> : <Plus size={16} />} 
+  {isBuilding ? 'Cancelar' : 'Crear Template'}
+</button>
+            
+          </div>
+
+          {/* CONSTRUCTOR */}
+          {isBuilding && (
+            <div className="bg-[#0a0a0a] border border-cyan-500/30 p-6 md:p-8 rounded-[2.5rem] shadow-[0_0_40px_rgba(34,211,238,0.05)] animate-in slide-in-from-top-4">
+              <input type="text" placeholder="Nombre de la Rutina (Ej. Día de Empuje)" value={templateName} onChange={(e) => setTemplateName(e.target.value)} className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 text-lg outline-none text-white font-black mb-6" />
+
+              <div className="space-y-4 mb-6">
+                {builderExercises.map((ex, idx) => (
+                  <div key={ex.id} className="grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border border-white/5 relative group">
+                    {builderExercises.length > 1 && (<button onClick={() => setBuilderExercises(builderExercises.filter(e => e.id !== ex.id))} className="absolute -right-2 -top-2 bg-red-500/20 text-red-400 p-1.5 rounded-full border border-red-500/30 z-10 hover:bg-red-500 hover:text-white"><X size={12} /></button>)}
+                    
+                    <div className="col-span-12 md:col-span-3">
+                      <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none" value={ex.category} onChange={(e) => { const n = [...builderExercises]; n[idx].category = e.target.value; n[idx].name = ''; setBuilderExercises(n); }}>
+                        <option value="">Músculo</option>
+                        {Object.keys(EXERCISES_DATABASE).map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-12 md:col-span-3">
+                      <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none disabled:opacity-50" value={ex.name} onChange={(e) => { const n = [...builderExercises]; n[idx].name = e.target.value; setBuilderExercises(n); }} disabled={!ex.category}>
+                        <option value="">Ejercicio</option>
+                        {ex.category && EXERCISES_DATABASE[ex.category]?.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                      <p className="text-[8px] text-slate-500 font-black uppercase text-center mb-1">Series</p>
+                      <input type="number" value={ex.sets} onChange={(e) => { const n = [...builderExercises]; n[idx].sets = parseInt(e.target.value) || 0; setBuilderExercises(n); }} className="w-full bg-[#050505] p-2 rounded-xl border border-white/10 text-xs text-center text-white font-bold outline-none" />
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                       <p className="text-[8px] text-slate-500 font-black uppercase text-center mb-1">Reps</p>
+                      <input type="text" value={ex.reps} onChange={(e) => { const n = [...builderExercises]; n[idx].reps = e.target.value; setBuilderExercises(n); }} className="w-full bg-[#050505] p-2 rounded-xl border border-white/10 text-xs text-center text-white font-bold outline-none" />
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                      <p className="text-[8px] text-cyan-500 font-black uppercase text-center mb-1">Descanso (s)</p>
+                      <input type="number" placeholder="90" value={ex.rest_time} onChange={(e) => { const n = [...builderExercises]; n[idx].rest_time = parseInt(e.target.value) || 0; setBuilderExercises(n); }} className="w-full bg-cyan-500/10 p-2 rounded-xl border border-cyan-500/20 text-xs text-center text-cyan-400 font-black outline-none" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4">
+                <button onClick={() => setBuilderExercises([...builderExercises, { id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }])} className="flex-1 py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest">+ Ejercicio</button>
+                <button onClick={handleSaveTemplate} className="flex-1 bg-cyan-600 hover:bg-cyan-500 py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest shadow-lg">{editingTemplateId ? 'Actualizar' : 'Guardar'}</button>
+              </div>
+            </div>
+          )}
+
+          {/* LISTA DE TEMPLATES */}
+          {!isBuilding && templates.map(template => (
+             <div key={template.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl mb-6 relative group">
+                <div className="absolute top-6 right-6 flex gap-2">
+                  <button onClick={() => handleEditInit(template)} className="p-2 text-slate-400 hover:text-cyan-400 bg-white/5 rounded-xl"><Edit3 size={14} /></button>
+                  <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 text-slate-400 hover:text-red-400 bg-white/5 rounded-xl"><Trash2 size={14} /></button>
+                </div>
+                <h4 className="text-xl font-black text-white italic mb-4">{template.name}</h4>
+                <div className="space-y-2 mb-6">
+                  {template.exercises.map((ex: any) => (
+                    <div key={ex.id} className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 font-bold">{ex.exercise_name}</span>
+                      <span className="text-slate-600 font-black">{ex.target_sets}x{ex.target_reps} • <span className="text-cyan-500">{ex.rest_time}s</span></span>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => startWorkout(template)} className="w-full bg-[#0a0a0a] border border-white/5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2">
+                  <Play size={14} fill="currentColor" /> Iniciar Sesión
+                </button>
+             </div>
+          ))}
+
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
