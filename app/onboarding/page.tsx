@@ -12,7 +12,7 @@ export default function OnboardingPage() {
   // Estados para capturar la biometría
   const [age, setAge] = useState('');
   const [height, setHeight] = useState('');
-  const [weight, setWeight] = useState('73'); // Tu peso base de ejemplo
+  const [weight, setWeight] = useState('77'); // Peso inicial actualizado
   const [goal, setGoal] = useState('masa_muscular');
   const [experience, setExperience] = useState('principiante');
 
@@ -21,8 +21,11 @@ export default function OnboardingPage() {
     const userId = (session?.user as any)?.id;
 
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+
       // 1. Guardamos el Perfil en Django
-      const resProfile = await fetch('http://127.0.0.1:8000/api/profile/', {
+      // OJO: Asegúrate de que '/api/profiles/' sea el endpoint correcto en tu backend para actualizar el perfil
+      const resProfile = await fetch(`${API_URL}/api/profile/`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -35,7 +38,7 @@ export default function OnboardingPage() {
       });
 
       // 2. Guardamos el primer registro de peso para la gráfica
-      await fetch('http://127.0.0.1:8000/api/weight-logs/', {
+      await fetch(`${API_URL}/api/weight-logs/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
