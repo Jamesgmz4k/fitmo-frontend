@@ -124,8 +124,8 @@ export default function Home() {
       const repsArray = repsMatch ? repsMatch[1].split(',').map(Number) : [];
       
       // NUEVA LÓGICA: Fitmo Hypertrophy Score
-      const totalReps = repsArray.reduce((a, b) => a + b, 0);
-      const hypertrophyScore = (weightVal * 10) + totalReps;
+const totalReps = repsArray.reduce((a: number, b: number) => a + b, 0);      
+const hypertrophyScore = (weightVal * 10) + totalReps;
       
       return { cargaEfectiva: hypertrophyScore };
     }).filter(d => d.cargaEfectiva > 0);
@@ -201,8 +201,8 @@ export default function Home() {
       const reps = rsMatch ? rsMatch[1].split(',').map(Number) : [];
       
       // Mismo Score de Hipertrofia para que coincida con la gráfica
-      const totalReps = reps.reduce((a, r) => a + r, 0);
-      return (w * 10) + totalReps;
+     const totalReps = reps.reduce((a: number, r: number) => a + r, 0);
+     return (w * 10) + totalReps;
     };
 
     const currentScore = getProgressionScore(history[0].title);
