@@ -28,8 +28,8 @@ export default function DatosAtletaPage() {
       if (!userId) return;
 
       try {
-        // Pedimos el Perfil
-        const resProfile = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
+        // Pedimos el Perfil usando apiClient
+        const resProfile = await apiClient(`/api/profile/?user_id=${userId}`);
         if (resProfile.ok) {
           const profileData = await resProfile.json();
           setAge(profileData.age?.toString() || '');
@@ -38,8 +38,8 @@ export default function DatosAtletaPage() {
           setExperience(profileData.experience_level || 'principiante');
         }
 
-        // Pedimos el último peso registrado
-        const resWeight = await fetch(`http://127.0.0.1:8000/api/weight-logs/?user_id=${userId}`);
+        // Pedimos el último peso registrado usando apiClient
+        const resWeight = await apiClient(`/api/weight-logs/?user_id=${userId}`);
         if (resWeight.ok) {
           const weightLogs = await resWeight.json();
           if (weightLogs.length > 0) {
@@ -68,7 +68,6 @@ export default function DatosAtletaPage() {
       // Guardamos cambios en el Perfil
       await apiClient('/api/profile/', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
           age: parseInt(age),
@@ -78,10 +77,9 @@ export default function DatosAtletaPage() {
         }),
       });
 
-      // Guardamos un nuevo registro de peso (esto actualizará tu gráfica de peso también)
+      // Guardamos un nuevo registro de peso
       await apiClient('/api/weight-logs/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
           weight: parseFloat(weight)
