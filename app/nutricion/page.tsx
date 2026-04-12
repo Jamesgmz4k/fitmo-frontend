@@ -5,6 +5,7 @@ import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import { useSession, signOut } from 'next-auth/react';
 import { Flame, Target, Activity, Utensils, Info, PieChart, Zap, Lock } from 'lucide-react';
+import { apiClient } from '../../lib/apiClient';
 
 export default function NutricionPage() {
   const { data: session } = useSession();
@@ -16,8 +17,8 @@ export default function NutricionPage() {
   const [age, setAge] = useState(25);
   const [height, setHeight] = useState(176);
   const [weight, setWeight] = useState(75);
-  const [gender, setGender] = useState('M'); 
-  const [activity, setActivity] = useState(1.55); 
+  const [gender, setGender] = useState('M');
+  const [activity, setActivity] = useState(1.55);
   const [goal, setGoal] = useState('volumen');
 
   const [bmr, setBmr] = useState(0);
@@ -35,7 +36,7 @@ export default function NutricionPage() {
         if (res.ok) {
           const data = await res.json();
           setIsPro(data.is_pro);
-          
+
           if (data.weight) setWeight(Number(data.weight));
           if (data.age) setAge(data.age);
           if (data.height) setHeight(Number(data.height));
@@ -79,9 +80,9 @@ export default function NutricionPage() {
   const handleSaveDiet = async () => {
     if (!userId) return alert("Debes iniciar sesión");
     setIsSaving(true);
-    
+
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/update-nutrition/', {
+      const res = await apiClient('/api/update-nutrition/', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -110,7 +111,7 @@ export default function NutricionPage() {
     <DashboardLayout userName={session?.user?.name}>
       <div className="p-4 md:p-10 font-sans text-slate-200">
         <div className="max-w-6xl mx-auto space-y-10">
-          
+
           <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
 
           <div className="flex items-center gap-4 mb-4">
@@ -130,27 +131,27 @@ export default function NutricionPage() {
               Analizando perfil de atleta...
             </div>
           ) : !isPro ? (
-            
+
             /* =========================================
                PANTALLA DE PAYWALL (PARA USUARIOS FREE)
                ========================================= */
             <div className="relative overflow-hidden bg-gradient-to-b from-white/[0.02] to-transparent border border-white/5 rounded-[2.5rem] p-10 md:p-20 text-center flex flex-col items-center justify-center">
-              
+
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full max-w-2xl bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
               <div className="relative z-10">
                 <div className="w-20 h-20 mx-auto bg-gradient-to-br from-violet-600 to-cyan-500 rounded-3xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(139,92,246,0.3)]">
                   <Lock size={32} className="text-white" />
                 </div>
-                
+
                 <h2 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter text-white mb-6">
                   Nutrición de <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Alto Rendimiento</span>
                 </h2>
-                
+
                 <p className="text-slate-400 max-w-lg mx-auto mb-10 text-sm md:text-base leading-relaxed">
                   El Motor Nutricional de Fitmo calcula matemáticamente tus macros exactos usando la fórmula de Mifflin-St Jeor para garantizar que estés en el superávit o déficit perfecto según tu objetivo.
                 </p>
-                
+
                 <div className="grid sm:grid-cols-3 gap-4 max-w-2xl mx-auto mb-12">
                   <div className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex flex-col items-center">
                     <Target size={20} className="text-cyan-400 mb-2" />
@@ -166,26 +167,26 @@ export default function NutricionPage() {
                   </div>
                 </div>
 
-                <a 
-                href="/pro" // <-- Cambia esto aquí
-                className="inline-block bg-white text-black px-10 py-5 rounded-full font-black text-[13px] tracking-[0.2em] uppercase hover:bg-slate-200 hover:scale-105 transition-all shadow-xl"
-              >
-                Desbloquear Fitmo Pro
-              </a>
+                <a
+                  href="/pro" // <-- Cambia esto aquí
+                  className="inline-block bg-white text-black px-10 py-5 rounded-full font-black text-[13px] tracking-[0.2em] uppercase hover:bg-slate-200 hover:scale-105 transition-all shadow-xl"
+                >
+                  Desbloquear Fitmo Pro
+                </a>
               </div>
             </div>
 
           ) : (
-            
+
             /* =========================================
                MOTOR NUTRICIONAL (PARA USUARIOS PRO)
                ========================================= */
             <div className="grid lg:grid-cols-12 gap-8">
-              
+
               {/* PANEL IZQUIERDO: CONTROLES */}
               <div className="lg:col-span-5 space-y-6">
                 <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-8">
-                  
+
                   {/* Sexo */}
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Sexo Biológico</label>
@@ -222,9 +223,9 @@ export default function NutricionPage() {
 
                   {/* Nivel de Actividad */}
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Activity size={14}/> Nivel de Actividad Diaria</label>
-                    <select 
-                      value={activity} 
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Activity size={14} /> Nivel de Actividad Diaria</label>
+                    <select
+                      value={activity}
                       onChange={(e) => setActivity(Number(e.target.value))}
                       className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 outline-none text-white text-xs appearance-none"
                     >
@@ -237,7 +238,7 @@ export default function NutricionPage() {
 
                   {/* Objetivo */}
                   <div>
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Target size={14}/> Objetivo Fitmo</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Target size={14} /> Objetivo Fitmo</label>
                     <div className="grid grid-cols-3 gap-2">
                       <button onClick={() => setGoal('definicion')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'definicion' ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
                         <Flame size={16} /> Definición
@@ -257,13 +258,13 @@ export default function NutricionPage() {
               {/* PANEL DERECHO: RESULTADOS */}
               <div className="lg:col-span-7 space-y-6">
                 <section className="bg-gradient-to-br from-white/[0.05] to-transparent p-8 md:p-10 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col justify-center">
-                  
+
                   <div className="absolute -top-20 -right-20 opacity-5 pointer-events-none">
                     <PieChart size={300} />
                   </div>
 
                   <div className="relative z-10 space-y-10">
-                    
+
                     {/* Bloque Principal: Calorías */}
                     <div className="text-center">
                       <p className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Presupuesto Diario</p>
@@ -278,7 +279,7 @@ export default function NutricionPage() {
 
                     {/* Distribución de Macros */}
                     <div className="grid md:grid-cols-3 gap-4 pt-8 border-t border-white/10">
-                      
+
                       <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
                         <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Proteína</p>
                         <p className="text-3xl font-black italic text-white">{macros.protein}<span className="text-sm text-slate-500 not-italic">g</span></p>
@@ -306,7 +307,7 @@ export default function NutricionPage() {
                       </p>
                     </div>
 
-                    <button 
+                    <button
                       onClick={handleSaveDiet}
                       disabled={isSaving}
                       className="w-full mt-6 bg-gradient-to-r from-emerald-600 to-cyan-600 p-4 rounded-full font-black text-[12px] tracking-widest uppercase hover:opacity-90 transition-all text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50"

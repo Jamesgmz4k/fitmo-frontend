@@ -4,15 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { ArrowLeft, Filter, Dumbbell, Calendar, X } from 'lucide-react';
 import Link from 'next/link';
+import { apiClient } from "../../lib/apiClient";
 
 export default function HistorialPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [workouts, setWorkouts] = useState<any[]>([]);
-  
+
   // 1. Estados para los Filtros (Agregamos el de fecha)
   const [filterMuscle, setFilterMuscle] = useState<string>('Todos');
-  const [filterDate, setFilterDate] = useState<string>(''); 
+  const [filterDate, setFilterDate] = useState<string>('');
 
   const userId = useMemo(() => (session?.user as any)?.id, [session]);
 
@@ -24,7 +25,7 @@ export default function HistorialPage() {
 
   useEffect(() => {
     if (userId) {
-      fetch('http://127.0.0.1:8000/api/workouts/')
+      apiClient('/api/workouts/')
         .then(res => res.json())
         .then(data => setWorkouts(data))
         .catch(err => console.error("Error al cargar historial:", err));
@@ -37,19 +38,19 @@ export default function HistorialPage() {
 
     const userWorkouts = workouts
       .filter(w => w.user?.toString() === userId?.toString())
-      .sort((a, b) => b.id - a.id); 
+      .sort((a, b) => b.id - a.id);
 
     const grouped = userWorkouts.reduce((acc, workout) => {
       const title = workout.title || "";
       const [musclePart, rest1] = title.split(':');
       const muscle = musclePart?.trim() || "Músculo";
-      
+
       // Aplicar filtro 1: Músculo
       if (filterMuscle !== 'Todos' && muscle !== filterMuscle) return acc;
 
-      const dateStr = workout.created_at || workout.date; 
+      const dateStr = workout.created_at || workout.date;
       const dateObj = new Date(dateStr);
-      
+
       // Aplicar filtro 2: Fecha
       if (filterDate) {
         // Convertimos la fecha del entrenamiento a YYYY-MM-DD para compararla con el input
@@ -57,7 +58,7 @@ export default function HistorialPage() {
         const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
         const dd = String(dateObj.getDate()).padStart(2, '0');
         const formattedWorkoutDate = `${yyyy}-${mm}-${dd}`;
-        
+
         if (formattedWorkoutDate !== filterDate) return acc;
       }
 
@@ -67,7 +68,7 @@ export default function HistorialPage() {
       const weight = weightMatch ? parseInt(weightMatch[1]) : 0;
       const repsMatch = title.match(/Reps:\s*(.+)/);
       const sets = repsMatch ? repsMatch[1].split(',').map((r: string, i: number) => ({ id: i, reps: r.trim() })) : [];
-      
+
       const displayDate = dateStr ? dateObj.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Fecha desconocida';
 
       if (!acc[displayDate]) acc[displayDate] = [];
@@ -89,7 +90,7 @@ export default function HistorialPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-slate-200 p-4 md:p-10 font-sans">
       <div className="max-w-4xl mx-auto space-y-8">
-        
+
         <header className="flex items-center justify-between bg-white/[0.02] p-6 rounded-[2rem] border border-white/5 shadow-xl">
           <div className="flex items-center gap-4">
             <Link href="/" className="p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors border border-white/5 text-slate-400 hover:text-white">
@@ -106,11 +107,11 @@ export default function HistorialPage() {
 
         {/* CONTROLES DE FILTROS: Músculo y Fecha en formato Grid */}
         <div className="grid sm:grid-cols-2 gap-4">
-          
+
           {/* Filtro: Músculo */}
           <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 flex gap-4 items-center shadow-lg">
             <Filter size={16} className="text-slate-500 ml-2" />
-            <select 
+            <select
               value={filterMuscle}
               onChange={(e) => setFilterMuscle(e.target.value)}
               className="bg-transparent text-sm font-black text-white outline-none w-full appearance-none uppercase tracking-widest cursor-pointer"
@@ -124,17 +125,17 @@ export default function HistorialPage() {
           {/* Filtro: Fecha */}
           <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 flex gap-4 items-center shadow-lg relative">
             <Calendar size={16} className="text-slate-500 ml-2" />
-            <input 
+            <input
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
               // colorScheme: 'dark' hace que el calendario nativo del navegador se pinte oscuro y no rompa el diseño
-              style={{ colorScheme: 'dark' }} 
+              style={{ colorScheme: 'dark' }}
               className="bg-transparent text-sm font-black text-white outline-none w-full appearance-none uppercase tracking-widest cursor-pointer"
             />
             {/* Botoncito para limpiar la fecha rápido sin usar el teclado */}
             {filterDate && (
-              <button 
+              <button
                 onClick={() => setFilterDate('')}
                 className="absolute right-4 p-1.5 bg-white/5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-white/10 transition-colors"
                 title="Limpiar fecha"
@@ -150,10 +151,10 @@ export default function HistorialPage() {
           {Object.keys(groupedAndFilteredWorkouts).length === 0 ? (
             <div className="text-center py-20 bg-white/[0.01] border border-dashed border-white/5 rounded-[2rem]">
               <p className="text-slate-600 text-sm font-black uppercase tracking-widest mb-4">No hay registros con estos filtros</p>
-              
+
               {/* Botón UX para resetear todo si la búsqueda fue fallida */}
               {(filterDate || filterMuscle !== 'Todos') && (
-                <button 
+                <button
                   onClick={() => { setFilterDate(''); setFilterMuscle('Todos'); }}
                   className="bg-white/5 px-6 py-2 rounded-xl text-xs font-black text-cyan-400 hover:bg-white/10 hover:text-cyan-300 transition-all uppercase tracking-widest"
                 >
@@ -169,7 +170,7 @@ export default function HistorialPage() {
                     {date}
                   </h3>
                 </div>
-                
+
                 <div className="grid sm:grid-cols-2 gap-4">
                   {groupedAndFilteredWorkouts[date].map((w: any) => (
                     <div key={w.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-[2rem] hover:border-violet-500/20 transition-all shadow-lg">
@@ -183,7 +184,7 @@ export default function HistorialPage() {
                           <span className="block text-[8px] text-slate-500 font-black uppercase tracking-widest mt-1">KG</span>
                         </div>
                       </div>
-                      
+
                       <div className="flex flex-wrap gap-2 pt-4 border-t border-white/5">
                         {w.sets.map((set: any, idx: number) => (
                           <div key={idx} className="bg-[#0a0a0a] px-3 py-1.5 rounded-lg border border-white/5 flex flex-col items-center min-w-[3rem]">

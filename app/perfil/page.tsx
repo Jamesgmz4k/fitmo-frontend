@@ -6,14 +6,15 @@ import { User, Mail, Zap, Shield, CreditCard, Fingerprint } from 'lucide-react';
 import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import Link from 'next/link';
+import { apiClient } from '../../lib/apiClient';
 
 export default function PerfilPage() {
   const { data: session } = useSession();
   const userId = (session?.user as any)?.id;
-  
+
   const [isPro, setIsPro] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // 1. ESTADO AGREGADO AQUÍ ADENTRO
   const [isManaging, setIsManaging] = useState(false);
 
@@ -43,7 +44,7 @@ export default function PerfilPage() {
   const handleManageSubscription = async () => {
     setIsManaging(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/create-customer-portal/', {
+      const res = await apiClient('/api/create-customer-portal/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId }),
@@ -65,11 +66,11 @@ export default function PerfilPage() {
     <DashboardLayout userName={session?.user?.name}>
       <div className="p-4 md:p-10 font-sans text-slate-200">
         <div className="max-w-4xl mx-auto space-y-10">
-          
+
           <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
-          
+
           <section className="bg-white/[0.02] p-8 md:p-12 rounded-[2.5rem] border border-white/5 shadow-xl">
-            
+
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-violet-600/20 to-purple-600/20 rounded-xl flex items-center justify-center border border-violet-500/20">
                 <Shield className="text-violet-400" size={24} />
@@ -85,14 +86,14 @@ export default function PerfilPage() {
             </p>
 
             <div className="grid md:grid-cols-2 gap-8">
-              
+
               {/* COLUMNA IZQUIERDA: DATOS DE LA CUENTA */}
               <div className="space-y-6">
                 <div className="bg-[#050505] p-6 rounded-3xl border border-white/5 space-y-6">
                   <h3 className="text-white font-black italic uppercase tracking-widest text-sm flex items-center gap-2 mb-4">
                     <User size={16} className="text-slate-400" /> Identidad Digital
                   </h3>
-                  
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase ml-2 flex items-center gap-2">
                       <User size={12} /> Nombre de Atleta
@@ -124,7 +125,7 @@ export default function PerfilPage() {
 
               {/* COLUMNA DERECHA: SUSCRIPCIÓN Y SEGURIDAD */}
               <div className="space-y-6">
-                
+
                 {/* TARJETA DE SUSCRIPCIÓN */}
                 {isLoading ? (
                   <div className="bg-[#050505] h-40 rounded-3xl border border-white/5 animate-pulse"></div>
@@ -144,9 +145,9 @@ export default function PerfilPage() {
                       <p className="text-xs text-slate-300 font-medium mb-6">
                         Tienes acceso total a las analíticas avanzadas y al mapa de calor muscular.
                       </p>
-                      
+
                       {/* 3. BOTÓN CONECTADO CORRECTAMENTE */}
-                      <button 
+                      <button
                         onClick={handleManageSubscription}
                         disabled={isManaging}
                         className="inline-block text-[10px] font-black uppercase tracking-widest text-violet-400 hover:text-white transition-colors disabled:opacity-50"
