@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
+import { apiClient } from '../../lib/apiClient'; // <-- El Santo Grial importado
 import { useSession, signOut } from 'next-auth/react';
 import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -23,23 +24,20 @@ export default function EntrenarPage() {
 
   const [templates, setTemplates] = useState<any[]>([]);
   const [prediction, setPrediction] = useState<any>(null);
-  const [workouts, setWorkouts] = useState<any[]>([]); // Para el historial
+  const [workouts, setWorkouts] = useState<any[]>([]); 
   
-  // --- Estados de Edición/Creación ---
   const [isBuilding, setIsBuilding] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [templateName, setTemplateName] = useState('');
   const [builderExercises, setBuilderExercises] = useState([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
   const [isPro, setIsPro] = useState(false);
 
-  // --- Estados de ENTRENAMIENTO EN VIVO ---
   const [activeTemplate, setActiveTemplate] = useState<any>(null);
   const [workoutData, setWorkoutData] = useState<Record<number, {weights: string[], reps: string[], completed: boolean[], previous: any}>>({});
   const [isSavingWorkout, setIsSavingWorkout] = useState(false);
   const [unit, setUnit] = useState<'kg' | 'lbs'>('kg'); 
-  const [showSuccessModal, setShowSuccessModal] = useState(false); // Modal de Confetti
+  const [showSuccessModal, setShowSuccessModal] = useState(false); 
   
-  // Estado del Cronómetro
   const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number } | null>(null);
 
   useEffect(() => {
@@ -63,33 +61,32 @@ export default function EntrenarPage() {
   const fetchData = async () => {
     if (!userId) return;
     try {
-      const resTemplates = await fetch(`http://127.0.0.1:8000/api/templates/?user_id=${userId}`);
+      // Usando apiClient
+      const resTemplates = await apiClient(`/api/templates/?user_id=${userId}`);
       if (resTemplates.ok) setTemplates(await resTemplates.json());
       
-      const resPrediction = await fetch(`http://127.0.0.1:8000/api/predict-workout/?user_id=${userId}`);
+      const resPrediction = await apiClient(`/api/predict-workout/?user_id=${userId}`);
       if (resPrediction.ok) setPrediction(await resPrediction.json());
 
-      // Traemos el historial para calcular el "Anterior"
-      const resWorkouts = await fetch('http://127.0.0.1:8000/api/workouts/');
+      const resWorkouts = await apiClient('/api/workouts/');
       if (resWorkouts.ok) setWorkouts(await resWorkouts.json());
 
-      const resProfile = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
-    if (resProfile.ok) {
-      const profileData = await resProfile.json();
-      setIsPro(profileData.is_pro);
-    }
+      const resProfile = await apiClient(`/api/profile/?user_id=${userId}`);
+      if (resProfile.ok) {
+        const profileData = await resProfile.json();
+        setIsPro(profileData.is_pro);
+      }
 
     } catch (error) { console.error("Error cargando:", error); }
   };
 
   useEffect(() => { fetchData(); }, [userId]);
 
-  // Busca la última marca de este usuario para un ejercicio específico
   const getLastPerformance = (exerciseName: string) => {
     const userLogs = workouts.filter(w => w.user?.toString() === userId?.toString() && w.title.includes(exerciseName));
     if (userLogs.length === 0) return null;
     
-    userLogs.sort((a,b) => b.id - a.id); // El más reciente
+    userLogs.sort((a,b) => b.id - a.id); 
     const last = userLogs[0];
     
     const weightMatch = last.title.match(/(\d+(?:\.\d+)?)\s*(kg|lbs)/i);
@@ -101,7 +98,6 @@ export default function EntrenarPage() {
     return { weight: w, reps };
   };
 
-  // --- LÓGICA CRUD TEMPLATES ---
   const handleSaveTemplate = async () => {
     if (!templateName || builderExercises.some(e => !e.name || !e.category)) {
       alert("Por favor completa el nombre de la rutina y selecciona todos los ejercicios.");
@@ -115,8 +111,14 @@ export default function EntrenarPage() {
           category: e.category, name: e.name, target_sets: e.sets, target_reps: e.reps, rest_time: e.rest_time
         }))
       };
-      const url = editingTemplateId ? `http://127.0.0.1:8000/api/templates/${editingTemplateId}/` : 'http://127.0.0.1:8000/api/templates/';
-      const res = await fetch(url, { method: editingTemplateId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      
+      // Usando apiClient
+      const url = editingTemplateId ? `/api/templates/${editingTemplateId}/` : '/api/templates/';
+      const res = await apiClient(url, { 
+        method: editingTemplateId ? 'PUT' : 'POST', 
+        body: JSON.stringify(payload) 
+      });
+      
       if (res.ok) {
         setIsBuilding(false); setEditingTemplateId(null); setTemplateName('');
         setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
@@ -135,23 +137,23 @@ export default function EntrenarPage() {
 
   const handleDeleteTemplate = async (id: number) => {
     if (!confirm("¿Seguro que quieres eliminar esta rutina?")) return;
-    const res = await fetch(`http://127.0.0.1:8000/api/templates/${id}/`, { method: 'DELETE' });
+    // Usando apiClient
+    const res = await apiClient(`/api/templates/${id}/`, { method: 'DELETE' });
     if (res.ok) fetchData();
   };
 
-  // --- LÓGICA ENTRENAMIENTO EN VIVO ---
   const startWorkout = (template: any) => {
     setActiveTemplate(template);
     const initialData: Record<number, any> = {};
     
     template.exercises.forEach((ex: any, idx: number) => {
-      const prevData = getLastPerformance(ex.exercise_name); // Calculamos su marca anterior
+      const prevData = getLastPerformance(ex.exercise_name); 
 
       initialData[idx] = {
         weights: Array(ex.target_sets).fill(''),
         reps: Array(ex.target_sets).fill(ex.target_reps),
         completed: Array(ex.target_sets).fill(false),
-        previous: prevData // Se lo pasamos a la tabla
+        previous: prevData 
       };
     });
     setWorkoutData(initialData);
@@ -188,7 +190,6 @@ export default function EntrenarPage() {
         if (validSets.length === 0) continue; 
         
         const currentMaxWeight = Math.max(...validSets.map(s => s.weight));
-        // Sumamos todas las reps para enviarlas como un solo número entero (Integer) a Django
         const currentTotalReps = validSets.reduce((acc, s) => acc + parseInt(s.rep), 0);
         
         let weightInKg = currentMaxWeight;
@@ -206,20 +207,18 @@ export default function EntrenarPage() {
         const repsString = validSets.map(s => s.rep).join(', ');
         const fullTitle = `${ex.category}: ${ex.exercise_name} | ${weightInKg}kg | Reps: ${repsString}`;
         
-        // Enviamos el payload blindado con todos los datos que tu models.py exige
-        const res = await fetch('http://127.0.0.1:8000/api/workouts/', {
+        // Usando apiClient
+        const res = await apiClient('/api/workouts/', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             title: fullTitle, 
             user: parseInt(userId),
-            user_id: parseInt(userId), // Por si DRF lo pide como user_id
-            weight: weightInKg,        // Float para tu base de datos
-            reps: currentTotalReps     // Integer para tu base de datos
+            user_id: parseInt(userId),
+            weight: weightInKg,        
+            reps: currentTotalReps     
           })
         });
 
-        // Agregamos la alerta para que NUNCA vuelva a fallar en silencio
         if (!res.ok) {
           const errorData = await res.json();
           console.error("❌ Django rechazó el registro:", errorData);
@@ -243,14 +242,10 @@ export default function EntrenarPage() {
   };
 
 
-  // ==========================================
-  // RENDER: MODO ENTRENAMIENTO EN VIVO
-  // ==========================================
   if (activeTemplate) {
     return (
       <DashboardLayout userName={session?.user?.name}>
         
-        {/* MODAL DE ÉXITO (PR ROTO) */}
         {showSuccessModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/90 backdrop-blur-sm p-4">
             <div className="bg-[#0a0a0a] border border-cyan-500/30 p-10 rounded-[3rem] text-center max-w-sm shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in-95">
@@ -304,7 +299,6 @@ export default function EntrenarPage() {
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{ex.category}</p>
                   </div>
 
-                  {/* CABECERA DE LA TABLA */}
                   <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 px-2">
                      <div className="w-8 text-center">Set</div>
                      <div className="flex-1 text-center hidden md:block">Anterior</div>
@@ -313,13 +307,11 @@ export default function EntrenarPage() {
                      <div className="w-10 text-center"><Check size={14} className="mx-auto"/></div>
                   </div>
 
-                  {/* FILAS DE SERIES */}
                   <div className="space-y-2">
                     {workoutData[idx]?.weights.map((_, setIdx) => {
                       const isCompleted = workoutData[idx].completed[setIdx];
                       const isTimerActive = activeTimer?.exerciseIdx === idx && activeTimer?.setIdx === setIdx;
                       
-                      // Extraer el log anterior para pintarlo difuminado
                       const prevLog = workoutData[idx].previous;
                       const prevText = (prevLog && prevLog.reps[setIdx]) ? `${prevLog.weight} x ${prevLog.reps[setIdx]}` : '-';
 
@@ -331,7 +323,6 @@ export default function EntrenarPage() {
                               {setIdx + 1}
                             </div>
                             
-                            {/* COLUMNA ANTERIOR (EL EFECTO FANTASMA) */}
                             <div className="flex-1 text-center text-slate-500/40 text-[11px] font-black tracking-widest hidden md:block select-none">
                               {prevText}
                             </div>
@@ -361,7 +352,6 @@ export default function EntrenarPage() {
                               disabled={isCompleted}
                             />
                             
-                            {/* BOTÓN DE PALOMITA */}
                             <div className="w-10 flex justify-center">
                               <button 
                                 onClick={() => toggleSetComplete(idx, setIdx, ex.rest_time || 90)}
@@ -373,7 +363,6 @@ export default function EntrenarPage() {
 
                           </div>
 
-                          {/* BARRA AZUL DEL CRONÓMETRO */}
                           {isTimerActive && (
                             <div className="mt-2 h-10 w-full bg-[#0a0a0a] rounded-xl border border-cyan-500/20 relative overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.1)]">
                                <div 
@@ -419,10 +408,6 @@ export default function EntrenarPage() {
     );
   }
 
-
-  // ==========================================
-  // RENDER: DASHBOARD DE TEMPLATES Y CONSTRUCTOR
-  // ==========================================
   return (
     <DashboardLayout userName={session?.user?.name}>
       <div className="p-4 md:p-10 font-sans text-slate-200 min-h-screen">
@@ -436,29 +421,26 @@ export default function EntrenarPage() {
               </h1>
             </div>
             <button 
-  onClick={() => { 
-    // LA REGLA DE NEGOCIO DEL MVP:
-    if (!isPro && templates.length >= 3 && !isBuilding) {
-      alert("🔒 Límite de la cuenta Free alcanzado.\n\nActualmente tienes 3 templates guardados. Para crear rutinas ilimitadas y desbloquear el análisis avanzado, actualiza a Fitmo Pro.");
-      return; // Detenemos la ejecución aquí
-    }
+              onClick={() => { 
+                if (!isPro && templates.length >= 3 && !isBuilding) {
+                  alert("🔒 Límite de la cuenta Free alcanzado.\n\nActualmente tienes 3 templates guardados. Para crear rutinas ilimitadas y desbloquear el análisis avanzado, actualiza a Fitmo Pro.");
+                  return; 
+                }
 
-    setIsBuilding(!isBuilding); 
-    if (isBuilding) { 
-      setEditingTemplateId(null); 
-      setTemplateName(''); 
-      setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]); 
-    } 
-  }}
-  className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
->
-  {isBuilding ? <X size={16} /> : <Plus size={16} />} 
-  {isBuilding ? 'Cancelar' : 'Crear Template'}
-</button>
-            
+                setIsBuilding(!isBuilding); 
+                if (isBuilding) { 
+                  setEditingTemplateId(null); 
+                  setTemplateName(''); 
+                  setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]); 
+                } 
+              }}
+              className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
+            >
+              {isBuilding ? <X size={16} /> : <Plus size={16} />} 
+              {isBuilding ? 'Cancelar' : 'Crear Template'}
+            </button>
           </div>
 
-          {/* CONSTRUCTOR */}
           {isBuilding && (
             <div className="bg-[#0a0a0a] border border-cyan-500/30 p-6 md:p-8 rounded-[2.5rem] shadow-[0_0_40px_rgba(34,211,238,0.05)] animate-in slide-in-from-top-4">
               <input type="text" placeholder="Nombre de la Rutina (Ej. Día de Empuje)" value={templateName} onChange={(e) => setTemplateName(e.target.value)} className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 text-lg outline-none text-white font-black mb-6" />
@@ -503,7 +485,6 @@ export default function EntrenarPage() {
             </div>
           )}
 
-          {/* LISTA DE TEMPLATES */}
           {!isBuilding && templates.map(template => (
              <div key={template.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl mb-6 relative group">
                 <div className="absolute top-6 right-6 flex gap-2">
