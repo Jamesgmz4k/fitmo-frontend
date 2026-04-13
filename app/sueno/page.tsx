@@ -6,6 +6,7 @@ import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import { useSession, signOut } from 'next-auth/react';
 import { Moon, Clock, Shield, CheckCircle2, Circle, Lock, Zap, Activity } from 'lucide-react';
 import Link from 'next/link';
+import { apiClient } from '../../lib/apiClient';
 
 export default function SuenoPage() {
   const { data: session } = useSession();
