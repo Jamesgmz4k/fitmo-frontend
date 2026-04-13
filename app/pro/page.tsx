@@ -3,17 +3,30 @@
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Zap, Flame, TrendingUp, CheckCircle2, ShieldCheck, Lock, ChevronRight } from 'lucide-react';
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import HeatMap from "../../components/dashboard/HeatMap";
 import { apiClient } from '../../lib/apiClient';
-
 
 export default function ProPage() {
   const { data: session } = useSession();
   const [loading, setLoading] = useState<string | null>(null);
   const router = useRouter();
 
-  // Ahora la función recibe el tipo de plan
+  // 1. EL "DESCONGELADOR" DE LA PÁGINA (Para el Bfcache de Safari/Chrome)
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // Si la página se está cargando desde la memoria caché (al darle botón "Atrás")
+      if (event.persisted) {
+        setLoading(null); // Reseteamos los botones a su estado original
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, []);
+
   const handleSubscribe = async (planType: string) => {
     const userId = (session?.user as any)?.id;
     if (!userId) {
@@ -21,13 +34,12 @@ export default function ProPage() {
       return;
     }
 
-    setLoading(planType); // Para mostrar el loading solo en el botón que se presionó
+    setLoading(planType); 
 
     try {
       const res = await apiClient('/api/create-checkout-session/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Enviamos el userId Y el plan_type a Django
+        // El apiClient ya inyecta los headers, pero lo dejamos por seguridad si lo prefieres
         body: JSON.stringify({ user_id: userId, plan_type: planType })
       });
 
@@ -86,7 +98,7 @@ export default function ProPage() {
         <section className="grid md:grid-cols-3 gap-6 items-stretch">
 
           {/* PLAN MENSUAL */}
-          <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[3rem] text-center flex flex-col h-full justify-between hover:border-white/10 transition-colors">
+          <div className="bg-white/[0.02] border border-white/5 p-8 rounded-[3rem] text-center flex flex-col h-full hover:border-white/10 transition-colors">
             <div>
               <h2 className="text-xl font-black italic text-white uppercase tracking-tighter mb-2">Mensual</h2>
               <p className="text-slate-400 text-xs mb-8">Prueba el sistema sin compromiso.</p>
@@ -95,21 +107,36 @@ export default function ProPage() {
                 <span className="text-4xl font-black text-white">$159</span>
                 <span className="text-slate-500 font-bold ml-2">mxn/mes</span>
               </div>
+
+              <ul className="space-y-4 mb-10 text-left">
+                {['Creación ilimitada de rutinas', 'Historial detallado de peso', 'Gráficas de rendimiento básicas'].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-sm text-slate-300 font-medium">
+                    <CheckCircle2 size={16} className="text-slate-500 shrink-0" /> {item}
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <button
-              onClick={() => handleSubscribe('Mensual')}
-              disabled={loading !== null}
-              className="w-full bg-white/5 hover:bg-white/10 border border-white/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-colors text-white"
-            >
-              {loading === 'monthly' ? 'Conectando...' : 'Elegir Mensual'}
-            </button>
+            <div className="mt-auto">
+              <button
+                onClick={() => handleSubscribe('Mensual')}
+                disabled={loading !== null}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-colors text-white disabled:opacity-50"
+              >
+                {loading === 'Mensual' ? 'Conectando...' : 'Elegir Mensual'}
+              </button>
+            </div>
           </div>
 
           {/* PLAN SEMESTRAL (Intermedio) */}
-          <div className="bg-white/[0.04] border border-violet-500/20 p-8 rounded-[3rem] text-center flex flex-col h-full justify-between hover:border-violet-500/40 transition-colors relative">
+          <div className="bg-white/[0.04] border border-violet-500/20 p-8 rounded-[3rem] text-center flex flex-col h-full hover:border-violet-500/40 transition-colors relative">
+            
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500/20 text-emerald-400 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-500/30 whitespace-nowrap">
+              Ahorro del 6%
+            </div>
+
             <div>
-              <h2 className="text-xl font-black italic text-white uppercase tracking-tighter mb-2">Semestral</h2>
+              <h2 className="text-xl font-black italic text-white uppercase tracking-tighter mb-2 mt-2">Semestral</h2>
               <p className="text-slate-400 text-xs mb-8">Resultados visibles garantizados.</p>
 
               <div className="mb-8 flex flex-col items-center">
@@ -121,15 +148,25 @@ export default function ProPage() {
                   Equivale a $149/mes
                 </span>
               </div>
+
+              <ul className="space-y-4 mb-10 text-left">
+                {['Todo lo del plan Mensual', 'Mapa de calor interactivo', 'Análisis de estancamiento medio'].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-sm text-slate-200 font-medium">
+                    <CheckCircle2 size={16} className="text-violet-400 shrink-0" /> {item}
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <button
-              onClick={() => handleSubscribe('Semestral')}
-              disabled={loading !== null}
-              className="w-full bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/50 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-colors text-white"
-            >
-              {loading === 'semiannual' ? 'Conectando...' : 'Elegir Semestral'}
-            </button>
+            <div className="mt-auto">
+              <button
+                onClick={() => handleSubscribe('Semestral')}
+                disabled={loading !== null}
+                className="w-full bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/50 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-colors text-white disabled:opacity-50"
+              >
+                {loading === 'Semestral' ? 'Conectando...' : 'Elegir Semestral'}
+              </button>
+            </div>
           </div>
 
           {/* PLAN ANUAL (El Señuelo Principal) */}
@@ -167,9 +204,9 @@ export default function ProPage() {
               <button
                 onClick={() => handleSubscribe('Anual')}
                 disabled={loading !== null}
-                className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 p-5 rounded-2xl font-black text-[12px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white shadow-[0_0_40px_rgba(139,92,246,0.3)] flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 p-5 rounded-2xl font-black text-[12px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white shadow-[0_0_40px_rgba(139,92,246,0.3)] flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:scale-100"
               >
-                {loading === 'annual' ? 'Conectando...' : <>Empezar Ahora <ChevronRight size={16} /></>}
+                {loading === 'Anual' ? 'Conectando...' : <>Empezar Ahora <ChevronRight size={16} /></>}
               </button>
               <p className="text-center text-[10px] text-slate-500 uppercase tracking-widest mt-5 font-bold flex items-center justify-center gap-1">
                 <Lock size={12} /> Cancela en cualquier momento
