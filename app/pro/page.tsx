@@ -92,7 +92,7 @@ export default function ProPage() {
               <p className="text-slate-400 text-xs mb-8">Prueba el sistema sin compromiso.</p>
 
               <div className="mb-8">
-                <span className="text-4xl font-black text-white">$199</span>
+                <span className="text-4xl font-black text-white">$159</span>
                 <span className="text-slate-500 font-bold ml-2">mxn/mes</span>
               </div>
             </div>
