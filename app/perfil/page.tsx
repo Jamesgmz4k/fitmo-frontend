@@ -23,7 +23,7 @@ export default function PerfilPage() {
     const fetchProfile = async () => {
       if (!userId) return;
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
+        const res = await apiClient(`/api/profile/?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setIsPro(data.is_pro);

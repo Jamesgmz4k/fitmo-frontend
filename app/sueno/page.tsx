@@ -16,7 +16,7 @@ export default function SuenoPage() {
 
   // Estados de la Calculadora REM
   const [wakeTime, setWakeTime] = useState('06:30');
-  const [sleepSuggestions, setSleepSuggestions] = useState<{time: string, cycles: number, hours: number}[]>([]);
+  const [sleepSuggestions, setSleepSuggestions] = useState<{ time: string, cycles: number, hours: number }[]>([]);
 
   // Estados del Checklist (Solo visuales por ahora)
   const [habits, setHabits] = useState([
@@ -31,7 +31,7 @@ export default function SuenoPage() {
     const checkProStatus = async () => {
       if (!userId) return;
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/profile/?user_id=${userId}`);
+        const res = await apiClient(`/api/profile/?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setIsPro(data.is_pro);
@@ -48,7 +48,7 @@ export default function SuenoPage() {
   // Lógica de la Calculadora REM (Ciclos de 90 minutos)
   useEffect(() => {
     if (!wakeTime) return;
-    
+
     const [hours, minutes] = wakeTime.split(':').map(Number);
     const wakeDate = new Date();
     wakeDate.setHours(hours, minutes, 0, 0);
@@ -60,8 +60,8 @@ export default function SuenoPage() {
     ].map(cycle => {
       const sleepDate = new Date(wakeDate.getTime() - (cycle.hours * 60 * 60 * 1000));
       // Restamos 15 minutos que es el promedio que toma quedarse dormido
-      sleepDate.setMinutes(sleepDate.getMinutes() - 15); 
-      
+      sleepDate.setMinutes(sleepDate.getMinutes() - 15);
+
       return {
         time: sleepDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true }),
         cycles: cycle.cycles,
@@ -80,7 +80,7 @@ export default function SuenoPage() {
     <DashboardLayout userName={session?.user?.name}>
       <div className="p-4 md:p-10 font-sans text-slate-200">
         <div className="max-w-6xl mx-auto space-y-10">
-          
+
           <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
 
           <div className="flex items-center gap-4 mb-8">
@@ -100,7 +100,7 @@ export default function SuenoPage() {
             </div>
           ) : (
             <div className="space-y-8">
-              
+
               {/* =========================================
                   SECCIÓN 1: CALCULADORA REM (GRATIS PARA TODOS)
                   ========================================= */}
@@ -114,8 +114,8 @@ export default function SuenoPage() {
                   </div>
                   <div className="bg-white/5 px-4 py-2 rounded-lg border border-white/10 flex items-center gap-3">
                     <span className="text-[10px] uppercase font-black tracking-widest text-slate-500">Hora de despertar:</span>
-                    <input 
-                      type="time" 
+                    <input
+                      type="time"
                       value={wakeTime}
                       onChange={(e) => setWakeTime(e.target.value)}
                       className="bg-transparent text-white font-bold text-lg outline-none cursor-pointer"
@@ -140,7 +140,7 @@ export default function SuenoPage() {
                   SECCIÓN 2: HERRAMIENTAS PRO (PAYWALL)
                   ========================================= */}
               <div className="grid lg:grid-cols-2 gap-8 relative">
-                
+
                 {/* CAPA DE BLOQUEO (Si no es Pro) */}
                 {!isPro && (
                   <div className="absolute inset-0 z-20 backdrop-blur-md bg-[#050505]/80 rounded-[2.5rem] border border-white/10 flex flex-col items-center justify-center p-8 text-center">
@@ -159,13 +159,13 @@ export default function SuenoPage() {
 
                 {/* CONTENIDO PRO (Se ve borroso y no clickable si no es pro, o normal si es pro) */}
                 <div className={`space-y-8 transition-all ${!isPro ? 'opacity-30 select-none pointer-events-none blur-sm' : ''}`}>
-                  
+
                   {/* Recovery Score */}
                   <section className="bg-gradient-to-br from-white/[0.02] to-transparent p-8 rounded-[2.5rem] border border-white/5 shadow-xl h-full flex flex-col justify-center items-center text-center">
                     <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em] mb-8 w-full text-left flex items-center gap-2">
-                      <Activity size={16}/> Fitmo Recovery Score
+                      <Activity size={16} /> Fitmo Recovery Score
                     </h2>
-                    
+
                     <div className="relative w-48 h-48 flex items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90">
                         <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-white/5" />
@@ -187,19 +187,18 @@ export default function SuenoPage() {
                   {/* Checklist de Higiene */}
                   <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl h-full">
                     <h2 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                      <Shield size={16}/> Higiene del Sueño
+                      <Shield size={16} /> Higiene del Sueño
                     </h2>
-                    
+
                     <div className="space-y-3">
                       {habits.map((habit) => (
-                        <button 
+                        <button
                           key={habit.id}
                           onClick={() => toggleHabit(habit.id)}
-                          className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${
-                            habit.done 
-                              ? 'bg-indigo-500/10 border-indigo-500/30 text-white' 
+                          className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all ${habit.done
+                              ? 'bg-indigo-500/10 border-indigo-500/30 text-white'
                               : 'bg-[#050505] border-white/5 text-slate-400 hover:bg-white/5'
-                          }`}
+                            }`}
                         >
                           {habit.done ? <CheckCircle2 className="text-indigo-400 shrink-0" size={20} /> : <Circle className="text-slate-600 shrink-0" size={20} />}
                           <span className="text-sm font-bold text-left">{habit.text}</span>

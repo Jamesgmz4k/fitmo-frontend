@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; // Importamos Link para que funcione igual
+import { apiClient } from '../../lib/apiClient';
 
 interface HeatMapItem {
   muscle: string;
@@ -25,7 +26,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
       if (!userId) return;
 
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/heatmap/?user_id=${userId}`);
+        const res = await apiClient(`/api/heatmap/?user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           setHeatMapData(data);
@@ -43,9 +44,9 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
   }, [session]);
 
   const getProgressColor = (recovery: number) => {
-    if (recovery <= 30) return 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]'; 
-    if (recovery <= 70) return 'bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.5)]'; 
-    return 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]'; 
+    if (recovery <= 30) return 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]';
+    if (recovery <= 70) return 'bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.5)]';
+    return 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]';
   };
 
   const getIcon = (recovery: number) => {
@@ -81,7 +82,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
               </div>
             </div>
             <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-              <div 
+              <div
                 className={`h-full rounded-full transition-all duration-1000 ease-out ${getProgressColor(item.recovery)}`}
                 style={{ width: `${item.recovery}%` }}
               ></div>
@@ -112,15 +113,15 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
           <div className="w-16 h-16 bg-gradient-to-br from-violet-600/20 to-cyan-600/20 rounded-2xl flex items-center justify-center mb-6 border border-white/10 shrink-0">
             <Lock size={28} className="text-violet-400" />
           </div>
-          
+
           <h3 className="text-lg font-black text-white italic mb-3 tracking-tighter uppercase text-center shrink-0">Mapa de Calor Pro</h3>
-          
+
           <p className="text-[11px] text-slate-400 mb-8 leading-relaxed font-medium shrink-0 max-w-[280px]">
-             Visualiza el estado de recuperación exacto de cada fibra muscular y evita el sobreentrenamiento.
+            Visualiza el estado de recuperación exacto de cada fibra muscular y evita el sobreentrenamiento.
           </p>
-          
-          <Link 
-            href="/pro" 
+
+          <Link
+            href="/pro"
             className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 p-4 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(139,92,246,0.3)] shrink-0"
           >
             <Zap size={14} fill="currentColor" /> Convertirme en Pro
@@ -134,7 +135,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
   if (heatMapData.length === 0) {
     return (
       <section className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] h-[380px] flex items-center justify-center p-8 text-center">
-         <p className="text-slate-500 text-xs font-medium">Registra un entrenamiento en el formulario para generar tu mapa de calor.</p>
+        <p className="text-slate-500 text-xs font-medium">Registra un entrenamiento en el formulario para generar tu mapa de calor.</p>
       </section>
     );
   }
@@ -142,7 +143,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
   // Caso: Es Pro y tiene datos
   return (
     <section className="h-[380px] w-full">
-       <HeatMapContent />
+      <HeatMapContent />
     </section>
   );
 }
