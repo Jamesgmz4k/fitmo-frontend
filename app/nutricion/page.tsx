@@ -27,10 +27,6 @@ export default function NutricionPage() {
   const [macros, setMacros] = useState({ protein: 0, fat: 0, carbs: 0 });
   const [isSaving, setIsSaving] = useState(false);
 
-  // --- ESTADOS PARA LA IA ---
-  const [dietaIA, setDietaIA] = useState<any>(null);
-  const [cargandoDieta, setCargandoDieta] = useState(false);
-
   // 1. CARGAR DATOS
   useEffect(() => {
     const loadSavedDiet = async () => {
@@ -111,29 +107,6 @@ export default function NutricionPage() {
     }
   };
 
-  // 4. GENERAR DIETA CON IA
-  const generarDieta = async () => {
-    if (!userId) return alert("Debes iniciar sesión");
-    setCargandoDieta(true);
-    try {
-      const res = await apiClient('/api/generar-dieta-ia/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDietaIA(data);
-      } else {
-        alert("Error al comunicarse con la IA. Asegúrate de tener tu backend configurado.");
-      }
-    } catch (error) {
-      console.error("Error al generar dieta", error);
-    } finally {
-      setCargandoDieta(false);
-    }
-  };
-
   return (
     <DashboardLayout userName={session?.user?.name}>
       <div className="p-4 md:p-10 font-sans text-slate-200">
@@ -190,12 +163,12 @@ export default function NutricionPage() {
                   </div>
                   <div className="bg-[#050505] border border-white/5 p-4 rounded-2xl flex flex-col items-center">
                     <Flame size={20} className="text-emerald-400 mb-2" />
-                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Menú con IA</span>
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-300">Ajuste Dinámico</span>
                   </div>
                 </div>
 
                 <a
-                  href="/pro" 
+                  href="/pro" // <-- Cambia esto aquí
                   className="inline-block bg-white text-black px-10 py-5 rounded-full font-black text-[13px] tracking-[0.2em] uppercase hover:bg-slate-200 hover:scale-105 transition-all shadow-xl"
                 >
                   Desbloquear Fitmo Pro
@@ -208,186 +181,148 @@ export default function NutricionPage() {
             /* =========================================
                MOTOR NUTRICIONAL (PARA USUARIOS PRO)
                ========================================= */
-            <>
-              <div className="grid lg:grid-cols-12 gap-8">
+            <div className="grid lg:grid-cols-12 gap-8">
 
-                {/* PANEL IZQUIERDO: CONTROLES */}
-                <div className="lg:col-span-5 space-y-6">
-                  <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-8">
+              {/* PANEL IZQUIERDO: CONTROLES */}
+              <div className="lg:col-span-5 space-y-6">
+                <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-8">
 
-                    {/* Sexo */}
+                  {/* Sexo */}
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Sexo Biológico</label>
+                    <div className="flex gap-4">
+                      <button onClick={() => setGender('M')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${gender === 'M' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>Hombre</button>
+                      <button onClick={() => setGender('F')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${gender === 'F' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>Mujer</button>
+                    </div>
+                  </div>
+
+                  {/* Deslizadores */}
+                  <div className="space-y-6">
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">Sexo Biológico</label>
-                      <div className="flex gap-4">
-                        <button onClick={() => setGender('M')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${gender === 'M' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>Hombre</button>
-                        <button onClick={() => setGender('F')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${gender === 'F' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>Mujer</button>
+                      <div className="flex justify-between text-xs font-bold mb-2">
+                        <span className="text-slate-400">Peso actual</span>
+                        <span className="text-white">{weight} kg</span>
                       </div>
+                      <input type="range" min="40" max="150" value={weight} onChange={(e) => setWeight(Number(e.target.value))} className="w-full accent-emerald-500" />
                     </div>
-
-                    {/* Deslizadores */}
-                    <div className="space-y-6">
-                      <div>
-                        <div className="flex justify-between text-xs font-bold mb-2">
-                          <span className="text-slate-400">Peso actual</span>
-                          <span className="text-white">{weight} kg</span>
-                        </div>
-                        <input type="range" min="40" max="150" value={weight} onChange={(e) => setWeight(Number(e.target.value))} className="w-full accent-emerald-500" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs font-bold mb-2">
-                          <span className="text-slate-400">Altura</span>
-                          <span className="text-white">{height} cm</span>
-                        </div>
-                        <input type="range" min="140" max="220" value={height} onChange={(e) => setHeight(Number(e.target.value))} className="w-full accent-emerald-500" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs font-bold mb-2">
-                          <span className="text-slate-400">Edad</span>
-                          <span className="text-white">{age} años</span>
-                        </div>
-                        <input type="range" min="15" max="80" value={age} onChange={(e) => setAge(Number(e.target.value))} className="w-full accent-emerald-500" />
-                      </div>
-                    </div>
-
-                    {/* Nivel de Actividad */}
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Activity size={14} /> Nivel de Actividad Diaria</label>
-                      <select
-                        value={activity}
-                        onChange={(e) => setActivity(Number(e.target.value))}
-                        className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 outline-none text-white text-xs appearance-none"
-                      >
-                        <option value={1.2}>Sedentario (Trabajo de oficina, poco ejercicio)</option>
-                        <option value={1.375}>Ligero (Entrena 1-3 días por semana)</option>
-                        <option value={1.55}>Moderado (Entrena 3-5 días por semana)</option>
-                        <option value={1.725}>Muy Activo (Entrena 6 días + Trabajo físico)</option>
-                      </select>
+                      <div className="flex justify-between text-xs font-bold mb-2">
+                        <span className="text-slate-400">Altura</span>
+                        <span className="text-white">{height} cm</span>
+                      </div>
+                      <input type="range" min="140" max="220" value={height} onChange={(e) => setHeight(Number(e.target.value))} className="w-full accent-emerald-500" />
                     </div>
-
-                    {/* Objetivo */}
                     <div>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Target size={14} /> Objetivo Fitmo</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => setGoal('definicion')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'definicion' ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
-                          <Flame size={16} /> Definición
-                        </button>
-                        <button onClick={() => setGoal('mantenimiento')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'mantenimiento' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
-                          <Activity size={16} /> Mantener
-                        </button>
-                        <button onClick={() => setGoal('volumen')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'volumen' ? 'bg-violet-500/10 border-violet-500/50 text-violet-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
-                          <Zap size={16} /> Volumen
-                        </button>
+                      <div className="flex justify-between text-xs font-bold mb-2">
+                        <span className="text-slate-400">Edad</span>
+                        <span className="text-white">{age} años</span>
                       </div>
+                      <input type="range" min="15" max="80" value={age} onChange={(e) => setAge(Number(e.target.value))} className="w-full accent-emerald-500" />
                     </div>
+                  </div>
 
-                  </section>
-                </div>
+                  {/* Nivel de Actividad */}
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Activity size={14} /> Nivel de Actividad Diaria</label>
+                    <select
+                      value={activity}
+                      onChange={(e) => setActivity(Number(e.target.value))}
+                      className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 outline-none text-white text-xs appearance-none"
+                    >
+                      <option value={1.2}>Sedentario (Trabajo de oficina, poco ejercicio)</option>
+                      <option value={1.375}>Ligero (Entrena 1-3 días por semana)</option>
+                      <option value={1.55}>Moderado (Entrena 3-5 días por semana)</option>
+                      <option value={1.725}>Muy Activo (Entrena 6 días + Trabajo físico)</option>
+                    </select>
+                  </div>
 
-                {/* PANEL DERECHO: RESULTADOS */}
-                <div className="lg:col-span-7 space-y-6">
-                  <section className="bg-gradient-to-br from-white/[0.05] to-transparent p-8 md:p-10 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col justify-center">
-
-                    <div className="absolute -top-20 -right-20 opacity-5 pointer-events-none">
-                      <PieChart size={300} />
-                    </div>
-
-                    <div className="relative z-10 space-y-10">
-
-                      {/* Bloque Principal: Calorías */}
-                      <div className="text-center">
-                        <p className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Presupuesto Diario</p>
-                        <div className="flex items-baseline justify-center gap-2">
-                          <span className="text-7xl md:text-8xl font-black italic tracking-tighter text-white">{targetCals}</span>
-                          <span className="text-xl font-bold text-slate-500">kcal</span>
-                        </div>
-                        <p className="text-xs text-slate-400 font-medium mt-4">
-                          Tasa Basal (BMR): <span className="text-white">{bmr}</span> | Mantenimiento (TDEE): <span className="text-white">{tdee}</span>
-                        </p>
-                      </div>
-
-                      {/* Distribución de Macros */}
-                      <div className="grid md:grid-cols-3 gap-4 pt-8 border-t border-white/10">
-
-                        <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
-                          <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Proteína</p>
-                          <p className="text-3xl font-black italic text-white">{macros.protein}<span className="text-sm text-slate-500 not-italic">g</span></p>
-                          <p className="text-[9px] text-slate-500 mt-2 font-medium">Constructor muscular</p>
-                        </div>
-
-                        <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
-                          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Carbos</p>
-                          <p className="text-3xl font-black italic text-white">{macros.carbs}<span className="text-sm text-slate-500 not-italic">g</span></p>
-                          <p className="text-[9px] text-slate-500 mt-2 font-medium">Energía explosiva</p>
-                        </div>
-
-                        <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
-                          <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Grasas</p>
-                          <p className="text-3xl font-black italic text-white">{macros.fat}<span className="text-sm text-slate-500 not-italic">g</span></p>
-                          <p className="text-[9px] text-slate-500 mt-2 font-medium">Hormonas & Salud</p>
-                        </div>
-
-                      </div>
-
-                      <div className="flex items-start gap-3 bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
-                        <Info className="text-blue-400 shrink-0" size={16} />
-                        <p className="text-[10px] text-blue-200/70 font-medium leading-relaxed">
-                          Esta es la dieta matemática óptima generada por Fitmo Engine. Recuerda que 1g de Proteína = 4 kcal, 1g de Carbohidrato = 4 kcal y 1g de Grasa = 9 kcal. Ajusta los carbohidratos y grasas a tu gusto, pero <strong>nunca bajes la proteína</strong>.
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={handleSaveDiet}
-                        disabled={isSaving}
-                        className="w-full mt-6 bg-gradient-to-r from-emerald-600 to-cyan-600 p-4 rounded-full font-black text-[12px] tracking-widest uppercase hover:opacity-90 transition-all text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50"
-                      >
-                        {isSaving ? 'Guardando...' : 'Guardar mi Plan Nutricional'}
+                  {/* Objetivo */}
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block flex items-center gap-2"><Target size={14} /> Objetivo Fitmo</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => setGoal('definicion')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'definicion' ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
+                        <Flame size={16} /> Definición
                       </button>
-
+                      <button onClick={() => setGoal('mantenimiento')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'mantenimiento' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
+                        <Activity size={16} /> Mantener
+                      </button>
+                      <button onClick={() => setGoal('volumen')} className={`py-4 rounded-xl text-[10px] uppercase tracking-wider font-black transition-all border flex flex-col items-center gap-1 ${goal === 'volumen' ? 'bg-violet-500/10 border-violet-500/50 text-violet-400' : 'bg-[#050505] border-white/5 text-slate-500 hover:bg-white/5'}`}>
+                        <Zap size={16} /> Volumen
+                      </button>
                     </div>
-                  </section>
-                </div>
+                  </div>
+
+                </section>
               </div>
 
-              {/* =========================================
-                  SECCIÓN NUEVA: GENERADOR DE MENÚ IA
-                  ========================================= */}
-              <div className="mt-12 border-t border-white/10 pt-12">
-                <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-6">
-                  <div>
-                    <h2 className="text-2xl font-black text-white italic uppercase flex items-center gap-2">
-                      <Zap className="text-cyan-400" size={24} /> Menú Inteligente IA
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-2 font-medium">
-                      Obtén ideas de comidas exactas para alcanzar tus {targetCals} kcal y {macros.protein}g de proteína.
-                    </p>
-                  </div>
-                  <button
-                    onClick={generarDieta}
-                    disabled={cargandoDieta}
-                    className="bg-gradient-to-r from-violet-600 to-cyan-600 hover:scale-[1.02] text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {cargandoDieta ? 'Generando menú...' : '✨ Generar Dieta con IA'}
-                  </button>
-                </div>
+              {/* PANEL DERECHO: RESULTADOS */}
+              <div className="lg:col-span-7 space-y-6">
+                <section className="bg-gradient-to-br from-white/[0.05] to-transparent p-8 md:p-10 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col justify-center">
 
-                {/* TARJETAS DE DIETA RENDERIZADAS */}
-                {dietaIA && dietaIA.comidas && (
-                  <div className="grid md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
-                    {dietaIA.comidas.map((comida: any, idx: number) => (
-                      <div key={idx} className="bg-white/[0.02] border border-white/5 p-6 rounded-[2.5rem] shadow-xl hover:border-white/10 transition-colors">
-                        
-                        <div className="flex justify-between items-start mb-6">
-                          <span className="text-[10px] font-black uppercase text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-full border border-cyan-500/20">
-                            {comida.tipo}
-                          </span>
-                          <span className="text-[10px] font-black text-white italic bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                            {comida.kcal} KCAL
-                          </span>
-                        </div>
-                        
-                        <h3 className="text-xl font-black italic text-white mb-6 leading-tight">{comida.nombre}</h3>
-                        
-                        <div className="space-y-3 mb-6">
-                          {comida.ingredientes.map((ing: string, i: number) => (
-                            <div key={i} className="text-[11px] font-medium text-slate-300 flex items-start gap-3 bg-[#050505] p-3 rounded-xl border border-white/5">
-                              <div className="w-1.5 h-1.5 bg-cyan-50
+                  <div className="absolute -top-20 -right-20 opacity-5 pointer-events-none">
+                    <PieChart size={300} />
+                  </div>
+
+                  <div className="relative z-10 space-y-10">
+
+                    {/* Bloque Principal: Calorías */}
+                    <div className="text-center">
+                      <p className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Presupuesto Diario</p>
+                      <div className="flex items-baseline justify-center gap-2">
+                        <span className="text-7xl md:text-8xl font-black italic tracking-tighter text-white">{targetCals}</span>
+                        <span className="text-xl font-bold text-slate-500">kcal</span>
+                      </div>
+                      <p className="text-xs text-slate-400 font-medium mt-4">
+                        Tasa Basal (BMR): <span className="text-white">{bmr}</span> | Mantenimiento (TDEE): <span className="text-white">{tdee}</span>
+                      </p>
+                    </div>
+
+                    {/* Distribución de Macros */}
+                    <div className="grid md:grid-cols-3 gap-4 pt-8 border-t border-white/10">
+
+                      <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
+                        <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Proteína</p>
+                        <p className="text-3xl font-black italic text-white">{macros.protein}<span className="text-sm text-slate-500 not-italic">g</span></p>
+                        <p className="text-[9px] text-slate-500 mt-2 font-medium">Constructor muscular</p>
+                      </div>
+
+                      <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
+                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Carbos</p>
+                        <p className="text-3xl font-black italic text-white">{macros.carbs}<span className="text-sm text-slate-500 not-italic">g</span></p>
+                        <p className="text-[9px] text-slate-500 mt-2 font-medium">Energía explosiva</p>
+                      </div>
+
+                      <div className="bg-[#050505]/50 p-6 rounded-3xl border border-white/5 text-center">
+                        <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Grasas</p>
+                        <p className="text-3xl font-black italic text-white">{macros.fat}<span className="text-sm text-slate-500 not-italic">g</span></p>
+                        <p className="text-[9px] text-slate-500 mt-2 font-medium">Hormonas & Salud</p>
+                      </div>
+
+                    </div>
+
+                    <div className="flex items-start gap-3 bg-blue-500/10 p-4 rounded-xl border border-blue-500/20">
+                      <Info className="text-blue-400 shrink-0" size={16} />
+                      <p className="text-[10px] text-blue-200/70 font-medium leading-relaxed">
+                        Esta es la dieta matemática óptima generada por Fitmo Engine. Recuerda que 1g de Proteína = 4 kcal, 1g de Carbohidrato = 4 kcal y 1g de Grasa = 9 kcal. Ajusta los carbohidratos y grasas a tu gusto, pero <strong>nunca bajes la proteína</strong>.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleSaveDiet}
+                      disabled={isSaving}
+                      className="w-full mt-6 bg-gradient-to-r from-emerald-600 to-cyan-600 p-4 rounded-full font-black text-[12px] tracking-widest uppercase hover:opacity-90 transition-all text-white shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50"
+                    >
+                      {isSaving ? 'Guardando...' : 'Guardar mi Plan Nutricional'}
+                    </button>
+
+                  </div>
+                </section>
+              </div>
+
+            </div>
+          )}
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
