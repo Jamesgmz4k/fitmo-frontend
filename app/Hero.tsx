@@ -30,7 +30,7 @@ export default function Hero({ onEnterApp }: { onEnterApp: () => void }) {
           <span className="text-slate-300">Registra. Visualiza. Supera.</span>
         </p>
 
-        {/* BOTÓN PRINCIPAL (IDÉNTICO AL DEL CRUD) */}
+        {/* BOTÓN PRINCIPAL  */}
         <button 
           onClick={() => {
             console.log("Accediendo al sistema...");

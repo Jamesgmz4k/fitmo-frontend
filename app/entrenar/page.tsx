@@ -1,513 +1,348 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import DashboardLayout from '../../components/dashboard/DashboardLayout';
-import DashboardHeader from '../../components/dashboard/DashboardHeader';
-import { apiClient } from '../../lib/apiClient'; // <-- El Santo Grial importado
-import { useSession, signOut } from 'next-auth/react';
-import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Plus, Trash2, Search, Zap, Target, BookOpen, AlertTriangle } from 'lucide-react';
+import { apiClient } from '../../lib/apiClient'; // Importamos tu cliente API
 
-const EXERCISES_DATABASE: Record<string, string[]> = {
-  "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
-  "Triceps": ["Jalón con polea barra recta", "Overhead extensions barra recta", "Press de triceps", "Skullcrushers", "Jalon con polea unilateral", "Fondos"],
-  "Bicep": ["Curl mancuernas", "Curl barra z", "Martillos", "Curl en polea barra recta", "Curl en maquina", "Curl predicador", "Curl concentrado", "Bayessian", "Curl en banco inclinado con mancuernas", "Spider curl"],
-  "Espalda": ["Remo en smith", "Remo sentado en maquina", "Remo con triquete abierto", "Pulldown agarre abierto", "Pulldown vertical", "Pullover con barra recta", "Pulldown agarre V", "Dominadas abiertas", "Dominadas cerradas", "Pulldown agarre neutro"],
-  "Pierna": ["Sentadilla regular", "Sentadilla cerrada", "Abductor abrir", "Abductor cerrar", "Desplantes en smith", "Curl de cuadricep en maquina", "Femoral acostado", "Femoral sentado", "Hip trust", "Prensa"],
-  "Abdomen": ["Crunches banco inclinado", "Twist ruso", "Aplastamiento de abdomen", "Elevaciones de piernas", "Plancha"],
-  "Hombro": ["Press militar", "Laterales", "Frontales"]
-};
+// --- DEFINICIÓN DE TIPOS ---
+interface Exercise {
+  id: string;
+  name: string;
+  muscle_group: string; // Django usa muscle_group, no group
+  equipment: string;
+  description?: string;
+}
 
-export default function EntrenarPage() {
-  const { data: session } = useSession();
-  const userId = (session?.user as any)?.id;
+interface TemplateExercise {
+  id: string; // ID temporal/local para Next.js
+  exerciseId: string; // ID real en la DB
+  exerciseName: string;
+  sets: number;
+  reps: number | null;
+  weight: number | null;
+  rpe: number | null;
+  muscle_group: string;
+}
 
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [prediction, setPrediction] = useState<any>(null);
-  const [workouts, setWorkouts] = useState<any[]>([]); 
-  
-  const [isBuilding, setIsBuilding] = useState(false);
-  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
-  const [templateName, setTemplateName] = useState('');
-  const [builderExercises, setBuilderExercises] = useState([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
-  const [isPro, setIsPro] = useState(false);
+export default function TrainPage() {
+  const router = useRouter();
 
-  const [activeTemplate, setActiveTemplate] = useState<any>(null);
-  const [workoutData, setWorkoutData] = useState<Record<number, {weights: string[], reps: string[], completed: boolean[], previous: any}>>({});
-  const [isSavingWorkout, setIsSavingWorkout] = useState(false);
-  const [unit, setUnit] = useState<'kg' | 'lbs'>('kg'); 
-  const [showSuccessModal, setShowSuccessModal] = useState(false); 
-  
-  const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number } | null>(null);
+  // --- ESTADO MAESTRO ---
+  const [templateName, setTemplateName] = useState('Mi Nueva Rutina');
+  const [exercisesInTemplate, setExercisesInTemplate] = useState<TemplateExercise[]>([]);
+  const [allCatalogExercises, setAllCatalogExercises] = useState<Exercise[]>([]); // El catálogo completo de la DB
+  const [activeMuscleGroup, setActiveMuscleGroup] = useState<string | null>('Pecho'); // Accordion abierto por defecto
 
+  // --- ESTADO DEL MODAL "NUEVO EJERCICIO" ---
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedMuscleForAdd, setSelectedMuscleForAdd] = useState<string | null>(null);
+  const [newExerciseName, setNewExerciseName] = useState('');
+  const [isCreatingExercise, setIsCreatingExercise] = useState(false); // Loading state del botón
+
+  const muscleGroups = ['Pecho', 'Espalda', 'Piernas', 'Hombros', 'Brazos', 'Abdomen', 'Cardio'];
+
+  // --- CARGAR CATÁLOGO INICIAL (Desde Django) ---
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (activeTimer && activeTimer.timeLeft > 0) {
-      interval = setInterval(() => {
-        setActiveTimer(prev => prev ? { ...prev, timeLeft: prev.timeLeft - 1 } : null);
-      }, 1000);
-    } else if (activeTimer && activeTimer.timeLeft === 0) {
-      setActiveTimer(null);
-    }
-    return () => clearInterval(interval);
-  }, [activeTimer]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const fetchData = async () => {
-    if (!userId) return;
-    try {
-      // Usando apiClient
-      const resTemplates = await apiClient(`/api/templates/?user_id=${userId}`);
-      if (resTemplates.ok) setTemplates(await resTemplates.json());
-      
-      const resPrediction = await apiClient(`/api/predict-workout/?user_id=${userId}`);
-      if (resPrediction.ok) setPrediction(await resPrediction.json());
-
-      const resWorkouts = await apiClient('/api/workouts/');
-      if (resWorkouts.ok) setWorkouts(await resWorkouts.json());
-
-      const resProfile = await apiClient(`/api/profile/?user_id=${userId}`);
-      if (resProfile.ok) {
-        const profileData = await resProfile.json();
-        setIsPro(profileData.is_pro);
+    async function loadCatalog() {
+      try {
+        const response = await apiClient('/api/exercises/', { method: 'GET' }); // Tu endpoint GET
+        const data = await response.json();
+        setAllCatalogExercises(data); // Asumimos que Django devuelve la lista de Exercise
+      } catch (error) {
+        console.error("Error cargando catálogo:", error);
+        alert("Error de conexión al cargar el catálogo.");
       }
-
-    } catch (error) { console.error("Error cargando:", error); }
-  };
-
-  useEffect(() => { fetchData(); }, [userId]);
-
-  const getLastPerformance = (exerciseName: string) => {
-    const userLogs = workouts.filter(w => w.user?.toString() === userId?.toString() && w.title.includes(exerciseName));
-    if (userLogs.length === 0) return null;
-    
-    userLogs.sort((a,b) => b.id - a.id); 
-    const last = userLogs[0];
-    
-    const weightMatch = last.title.match(/(\d+(?:\.\d+)?)\s*(kg|lbs)/i);
-    const w = weightMatch ? parseFloat(weightMatch[1]) : 0;
-    
-    const repsMatch = last.title.match(/Reps:\s*(.+)/);
-    const reps = repsMatch ? repsMatch[1].split(',').map((r: string) => parseInt(r.trim())) : [];
-    
-    return { weight: w, reps };
-  };
-
-  const handleSaveTemplate = async () => {
-    if (!templateName || builderExercises.some(e => !e.name || !e.category)) {
-      alert("Por favor completa el nombre de la rutina y selecciona todos los ejercicios.");
-      return;
     }
+    loadCatalog();
+  }, []); // Solo corre una vez al montar
+
+  // --- HANDLERS: AGREGAR EXISTENTE AL TEMPLATE ---
+  const handleAddExistingToTemplate = (exercise: Exercise) => {
+    const newTemplateExercise: TemplateExercise = {
+      id: `temp-${Date.now()}`,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      muscle_group: exercise.muscle_group,
+      sets: 3,
+      reps: 10,
+      weight: 60,
+      rpe: 8,
+    };
+    setExercisesInTemplate([...exercisesInTemplate, newTemplateExercise]);
+  };
+
+  // --- HANDLERS: CREAR Y AGREGAR NUEVO EJERCICIO ---
+  
+  // 1. Abrir el modal y guardar el grupo muscular destino
+  const openNewExerciseModal = (muscle: string) => {
+    setSelectedMuscleForAdd(muscle);
+    setNewExerciseName('');
+    setIsAddModalOpen(true);
+  };
+
+  // 2. Cerrar el modal
+  const closeNewExerciseModal = () => {
+    setIsAddModalOpen(false);
+    setSelectedMuscleForAdd(null);
+  };
+
+  // 3. La función crítica: Llama a Django POST
+  const handleAddNewExercise = async () => {
+    if (!newExerciseName.trim() || !selectedMuscleForAdd) return;
+    
+    setIsCreatingExercise(true); // Encendemos el loading
+
     try {
-      const payload = {
-        user_id: userId,
-        name: templateName,
-        exercises: builderExercises.map(e => ({
-          category: e.category, name: e.name, target_sets: e.sets, target_reps: e.reps, rest_time: e.rest_time
-        }))
-      };
-      
-      // Usando apiClient
-      const url = editingTemplateId ? `/api/templates/${editingTemplateId}/` : '/api/templates/';
-      const res = await apiClient(url, { 
-        method: editingTemplateId ? 'PUT' : 'POST', 
-        body: JSON.stringify(payload) 
+      // LLAMADA A TU BACKEND (DJANGO)
+      const response = await apiClient('/api/exercises/', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newExerciseName.trim(),
+          muscle_group: selectedMuscleForAdd, // Mismo formato que Django
+          equipment: 'Variado', // Valor por defecto para el MVP
+          description: `Ejercicio creado por el usuario en FITMO.`
+        }),
       });
-      
-      if (res.ok) {
-        setIsBuilding(false); setEditingTemplateId(null); setTemplateName('');
-        setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
-        fetchData();
-      }
-    } catch (error) { console.error("Error guardando:", error); }
-  };
 
-  const handleEditInit = (template: any) => {
-    setTemplateName(template.name);
-    setBuilderExercises(template.exercises.map((ex: any, idx: number) => ({
-      id: Date.now() + idx, category: ex.category, name: ex.exercise_name, sets: ex.target_sets, reps: ex.target_reps, rest_time: ex.rest_time || 90
-    })));
-    setEditingTemplateId(template.id); setIsBuilding(true); window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+      const newExerciseFromDB = await response.json();
 
-  const handleDeleteTemplate = async (id: number) => {
-    if (!confirm("¿Seguro que quieres eliminar esta rutina?")) return;
-    // Usando apiClient
-    const res = await apiClient(`/api/templates/${id}/`, { method: 'DELETE' });
-    if (res.ok) fetchData();
-  };
+      if (response.ok) {
+        // A) Actualizamos el catálogo local para que aparezca en el accordion
+        setAllCatalogExercises([...allCatalogExercises, newExerciseFromDB]);
 
-  const startWorkout = (template: any) => {
-    setActiveTemplate(template);
-    const initialData: Record<number, any> = {};
-    
-    template.exercises.forEach((ex: any, idx: number) => {
-      const prevData = getLastPerformance(ex.exercise_name); 
+        // B) Lo agregamos automáticamente al template para que el usuario no tenga que buscarlo
+        handleAddExistingToTemplate(newExerciseFromDB);
 
-      initialData[idx] = {
-        weights: Array(ex.target_sets).fill(''),
-        reps: Array(ex.target_sets).fill(ex.target_reps),
-        completed: Array(ex.target_sets).fill(false),
-        previous: prevData 
-      };
-    });
-    setWorkoutData(initialData);
-    setActiveTimer(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const toggleSetComplete = (exIdx: number, setIdx: number, restTime: number) => {
-    const newData = {...workoutData};
-    const isNowCompleted = !newData[exIdx].completed[setIdx];
-    newData[exIdx].completed[setIdx] = isNowCompleted;
-    setWorkoutData(newData);
-
-    if (isNowCompleted) {
-      setActiveTimer({ exerciseIdx: exIdx, setIdx: setIdx, timeLeft: restTime, totalTime: restTime });
-    } else {
-      if (activeTimer?.exerciseIdx === exIdx && activeTimer?.setIdx === setIdx) {
-        setActiveTimer(null);
-      }
-    }
-  };
-
- const finishWorkout = async () => {
-    setIsSavingWorkout(true);
-    let hasNewRecord = false;
-
-    try {
-      for (let i = 0; i < activeTemplate.exercises.length; i++) {
-        const ex = activeTemplate.exercises[i];
-        const data = workoutData[i];
-        
-        const validSets = data.completed.map((isDone: boolean, idx: number) => isDone ? { weight: parseFloat(data.weights[idx]) || 0, rep: data.reps[idx] } : null).filter(Boolean) as {weight: number, rep: string}[];
-        
-        if (validSets.length === 0) continue; 
-        
-        const currentMaxWeight = Math.max(...validSets.map(s => s.weight));
-        const currentTotalReps = validSets.reduce((acc, s) => acc + parseInt(s.rep), 0);
-        
-        let weightInKg = currentMaxWeight;
-        if (unit === 'lbs') {
-          weightInKg = Math.round(currentMaxWeight / 2.20462); 
-        }
-
-        if (data.previous) {
-            const prevTotalReps = data.previous.reps.reduce((a: number, b: number) => a + b, 0);
-            if (weightInKg > data.previous.weight || (weightInKg === data.previous.weight && currentTotalReps > prevTotalReps)) {
-                hasNewRecord = true;
-            }
-        }
-
-        const repsString = validSets.map(s => s.rep).join(', ');
-        const fullTitle = `${ex.category}: ${ex.exercise_name} | ${weightInKg}kg | Reps: ${repsString}`;
-        
-        // Usando apiClient
-        const res = await apiClient('/api/workouts/', {
-          method: 'POST',
-          body: JSON.stringify({ 
-            title: fullTitle, 
-            user: parseInt(userId),
-            user_id: parseInt(userId),
-            weight: weightInKg,        
-            reps: currentTotalReps     
-          })
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json();
-          console.error("❌ Django rechazó el registro:", errorData);
-          alert("Error al guardar en la base de datos. Revisa la consola del navegador.");
-        }
-      }
-
-      if (hasNewRecord) {
-         confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, colors: ['#8b5cf6', '#22d3ee', '#10b981'] });
-         setShowSuccessModal(true);
+        // C) Cerramos el modal
+        closeNewExerciseModal();
       } else {
-         setActiveTemplate(null);
-         fetchData(); 
+        alert("Error al crear el ejercicio: " + (newExerciseFromDB.error || "Desconocido"));
       }
-      
-    } catch (error) { 
-      console.error("Error de red guardando sesión:", error); 
-    } finally { 
-      setIsSavingWorkout(false); 
+    } catch (error) {
+      console.error("Error en la petición POST:", error);
+      alert("Error de conexión al servidor Django.");
+    } finally {
+      setIsCreatingExercise(false); // Apagamos el loading
     }
   };
 
+  // --- HANDLERS: MODIFICAR / ELIMINAR DEL TEMPLATE ---
+  const handleRemoveFromTemplate = (id: string) => {
+    setExercisesInTemplate(exercisesInTemplate.filter((ex) => ex.id !== id));
+  };
 
-  if (activeTemplate) {
-    return (
-      <DashboardLayout userName={session?.user?.name}>
-        
-        {showSuccessModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/90 backdrop-blur-sm p-4">
-            <div className="bg-[#0a0a0a] border border-cyan-500/30 p-10 rounded-[3rem] text-center max-w-sm shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in-95">
-              <div className="w-24 h-24 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-cyan-500/20">
-                <Trophy size={48} className="text-cyan-400" />
-              </div>
-              <h2 className="text-3xl font-black italic text-white mb-2 uppercase tracking-tighter">¡Felicidades!</h2>
-              <p className="text-slate-400 text-sm mb-8 font-medium leading-relaxed">
-                ¡Tu fuerza aumentó! Has superado tu marca anterior. Sigue aplicando sobrecarga progresiva.
-              </p>
+  const updateSetParam = (id: string, param: 'sets' | 'reps' | 'weight' | 'rpe', value: number | null) => {
+    setExercisesInTemplate(exercisesInTemplate.map(ex => 
+      ex.id === id ? { ...ex,: value } : ex
+    ));
+  };
+
+  const saveTemplate = () => {
+    // Aquí iría tu lógica para hacer el POST a /api/templates/
+    console.log("Guardando template:", { name: templateName, exercises: exercisesInTemplate });
+    alert(`Template "${templateName}" guardado localmente (simulación).`);
+  };
+
+  // --- RENDERING: FILTRAR CATÁLOGO ---
+  const exercisesInCatalogByMuscle = (muscle: string) => {
+    return allCatalogExercises.filter(ex => ex.muscle_group === muscle);
+  };
+
+  return (
+    <main className="min-h-screen bg-[#050505] text-slate-200 font-sans relative selection:bg-violet-500/30">
+      
+      {/* --- MODAL "AGREGAR NUEVO EJERCICIO" (Overlay) --- */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <div className="bg-[#0a0a0a] border border-white/10 p-8 rounded-[2rem] shadow-2xl w-full max-w-md space-y-6 transform animate-in fade-in zoom-in duration-300">
+            
+            <div className="flex items-center gap-4 text-violet-400">
+              <BookOpen size={24} />
+              <h3 className="text-xl font-black italic uppercase text-white tracking-tight">Expandir Catálogo</h3>
+            </div>
+
+            <p className="text-slate-400 text-sm font-medium leading-relaxed">
+              Crea un nuevo ejercicio para el grupo <span className="text-white font-bold">{selectedMuscleForAdd}</span>. Este ejercicio estará disponible para tus futuras rutinas.
+            </p>
+
+            <input
+              type="text"
+              value={newExerciseName}
+              onChange={(e) => setNewExerciseName(e.target.value)}
+              placeholder="Ej: Press Francés con Mancuerna"
+              className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white placeholder:text-slate-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all font-semibold"
+            />
+
+            <div className="flex items-center gap-3 pt-4">
               <button
-                onClick={() => { setShowSuccessModal(false); setActiveTemplate(null); fetchData(); }}
-                className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:scale-105 text-white p-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+                onClick={closeNewExerciseModal}
+                className="flex-1 bg-white/5 hover:bg-white/10 p-4 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 transition-colors"
               >
-                Continuar
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddNewExercise}
+                disabled={!newExerciseName.trim() || isCreatingExercise}
+                className="flex-1 bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/50 p-4 rounded-xl font-bold text-xs uppercase tracking-widest text-white transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+              >
+                {isCreatingExercise ? 'Guardando...' : '➕ Crear Ejercicio'}
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="p-4 md:p-10 font-sans text-slate-200 min-h-screen">
-          <div className="max-w-3xl mx-auto space-y-6">
-            
-            <div className="flex items-center justify-between">
-              <button onClick={() => setActiveTemplate(null)} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-black uppercase tracking-widest">
-                <ChevronLeft size={16} /> Abandonar Sesión
-              </button>
-              
-              <select 
-                className="bg-[#050505] border border-white/10 px-4 py-2 rounded-xl text-xs font-black text-cyan-400 uppercase outline-none cursor-pointer"
-                value={unit} onChange={(e) => setUnit(e.target.value as 'kg' | 'lbs')}
-              >
-                <option value="kg">Kilos (KG)</option>
-                <option value="lbs">Libras (LBS)</option>
-              </select>
+      {/* --- NAVEGACIÓN PRINCIPAL --- */}
+      <nav className="border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-[11px] font-black uppercase tracking-widest">
+            <ArrowLeft size={16} /> Volver
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="bg-violet-500/10 border border-violet-500/20 text-violet-400 p-2.5 rounded-full"><Target size={18} /></div>
+            <h1 className="text-2xl font-black italic tracking-tighter text-white">CREAR TEMPLATE</h1>
+          </div>
+          <button onClick={saveTemplate} className="bg-gradient-to-r from-violet-600 to-cyan-600 px-6 py-3 rounded-full font-black text-xs uppercase tracking-widest text-white hover:scale-[1.02] transition-transform shadow-[0_0_20px_rgba(139,92,246,0.3)]">
+            Guardar Rutina
+          </button>
+        </div>
+      </nav>
+
+      {/* --- LAYOUT DE 2 COLUMNAS --- */}
+      <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-[1fr,380px] gap-12 items-start">
+
+        {/* --- COLUMNA IZQUIERDA: EL TEMPLATE (Lista de Series) --- */}
+        <section className="space-y-8">
+          {/* Header del Template */}
+          <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-white/5 shadow-inner">
+            <input
+              type="text"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              className="text-3xl font-black italic uppercase tracking-tighter bg-transparent text-white w-full focus:outline-none focus:ring-0 p-0 border-none"
+            />
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">{exercisesInTemplate.length} ejercicios agregados</p>
+          </div>
+
+          {/* Lista de Ejercicios en el Template */}
+          {exercisesInTemplate.length === 0 ? (
+            <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-3xl bg-[#0a0a0a]">
+              <Target size={48} className="text-slate-700 mx-auto mb-6" />
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Usa el buscador de la derecha ➡️</p>
+              <p className="text-slate-600 text-[11px] mt-1">O crea uno nuevo si no lo encuentras.</p>
             </div>
-
-            <div className="bg-[#0a0a0a] border border-white/5 px-6 py-8 rounded-[2rem] shadow-xl relative overflow-hidden">
-              <div className="flex items-center gap-2 text-cyan-400 mb-2">
-                 <Timer size={16} className={activeTimer ? "animate-pulse" : ""} />
-                 <span className="text-[10px] font-black uppercase tracking-widest">{activeTimer ? 'Descansando...' : 'Sesión Activa'}</span>
-              </div>
-              <h1 className="text-3xl font-black italic text-white tracking-tighter">{activeTemplate.name}</h1>
-            </div>
-
+          ) : (
             <div className="space-y-6">
-              {activeTemplate.exercises.map((ex: any, idx: number) => (
-                <div key={ex.id} className="bg-[#050505] border border-white/5 p-4 md:p-6 rounded-[2rem] shadow-lg">
-                  <div className="mb-4">
-                      <h3 className="text-lg font-black italic text-cyan-400 uppercase">{ex.exercise_name}</h3>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{ex.category}</p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 px-2">
-                     <div className="w-8 text-center">Set</div>
-                     <div className="flex-1 text-center hidden md:block">Anterior</div>
-                     <div className="w-16 text-center">{unit}</div>
-                     <div className="w-16 text-center">Reps</div>
-                     <div className="w-10 text-center"><Check size={14} className="mx-auto"/></div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {workoutData[idx]?.weights.map((_, setIdx) => {
-                      const isCompleted = workoutData[idx].completed[setIdx];
-                      const isTimerActive = activeTimer?.exerciseIdx === idx && activeTimer?.setIdx === setIdx;
-                      
-                      const prevLog = workoutData[idx].previous;
-                      const prevText = (prevLog && prevLog.reps[setIdx]) ? `${prevLog.weight} x ${prevLog.reps[setIdx]}` : '-';
-
-                      return (
-                        <div key={setIdx}>
-                          <div className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isCompleted ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white/[0.02] border-white/5'}`}>
-                            
-                            <div className="w-8 text-center font-black text-slate-400 text-sm">
-                              {setIdx + 1}
-                            </div>
-                            
-                            <div className="flex-1 text-center text-slate-500/40 text-[11px] font-black tracking-widest hidden md:block select-none">
-                              {prevText}
-                            </div>
-                            
-                            <input 
-                              type="number" 
-                              placeholder="0"
-                              value={workoutData[idx].weights[setIdx]}
-                              onChange={(e) => {
-                                const newData = {...workoutData};
-                                newData[idx].weights[setIdx] = e.target.value;
-                                setWorkoutData(newData);
-                              }}
-                              className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
-                              disabled={isCompleted} 
-                            />
-                            
-                            <input 
-                              type="number" 
-                              value={workoutData[idx].reps[setIdx]}
-                              onChange={(e) => {
-                                const newData = {...workoutData};
-                                newData[idx].reps[setIdx] = e.target.value;
-                                setWorkoutData(newData);
-                              }}
-                              className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
-                              disabled={isCompleted}
-                            />
-                            
-                            <div className="w-10 flex justify-center">
-                              <button 
-                                onClick={() => toggleSetComplete(idx, setIdx, ex.rest_time || 90)}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isCompleted ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-white/10 text-slate-400 hover:bg-white/20 hover:text-white'}`}
-                              >
-                                <Check size={16} strokeWidth={4} />
-                              </button>
-                            </div>
-
-                          </div>
-
-                          {isTimerActive && (
-                            <div className="mt-2 h-10 w-full bg-[#0a0a0a] rounded-xl border border-cyan-500/20 relative overflow-hidden flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.1)]">
-                               <div 
-                                 className="absolute left-0 top-0 h-full bg-cyan-500/80 transition-all duration-1000 ease-linear" 
-                                 style={{ width: `${(activeTimer.timeLeft / activeTimer.totalTime) * 100}%` }}
-                               ></div>
-                               <span className="relative z-10 font-black text-white text-sm tracking-widest">{formatTime(activeTimer.timeLeft)}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+              {exercisesInTemplate.map((ex, index) => (
+                <div key={ex.id} className="bg-[#0a0a0a] border border-white/5 p-6 rounded-3xl group shadow-inner">
                   
-                  <button 
-                    onClick={() => {
-                       const newData = {...workoutData};
-                       newData[idx].weights.push('');
-                       newData[idx].reps.push(ex.target_reps);
-                       newData[idx].completed.push(false);
-                       setWorkoutData(newData);
-                    }}
-                    className="mt-4 w-full py-3 bg-white/[0.02] hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 transition-colors"
-                  >
-                    + Añadir Serie
-                  </button>
+                  {/* Fila de Título y Eliminar */}
+                  <div className="flex items-center justify-between mb-5 pb-5 border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black uppercase text-violet-400 bg-violet-500/10 px-3 py-1.5 rounded-full">{index + 1}</span>
+                      <h4 className="text-lg font-black text-white">{ex.exerciseName}</h4>
+                      <span className="text-[10px] font-medium text-slate-500 uppercase tracking-widest bg-white/5 px-3 py-1.5 rounded-full">{ex.muscle_group}</span>
+                    </div>
+                    <button onClick={() => handleRemoveFromTemplate(ex.id)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
 
+                  {/* Fila de Inputs (Sets, Reps, Weight, RPE) */}
+                  <div className="grid grid-cols-4 gap-4 bg-white/5 p-4 rounded-xl">
+                    {.map(input => (
+                        <div key={input.label} className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1">{input.label}</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={input.value || ''}
+                              onChange={(e) => updateSetParam(ex.id, input.param, e.target.value === '' ? null : Number(e.target.value))}
+                              placeholder="-"
+                              className="w-full bg-[#050505] border border-white/5 text-center p-3 rounded-lg text-white font-black text-sm focus:ring-violet-500 focus:border-violet-500 transition-all placeholder:text-slate-700"
+                            />
+                            {input.value && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600">{input.unit}</span>}
+                          </div>
+                        </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
-
-            <button 
-              onClick={finishWorkout}
-              disabled={isSavingWorkout}
-              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white p-6 rounded-[2rem] font-black text-sm uppercase tracking-widest transition-all shadow-[0_0_40px_rgba(34,211,238,0.2)] flex justify-center items-center gap-3 disabled:opacity-50"
-            >
-              {isSavingWorkout ? 'Procesando...' : <><CheckCircle2 size={24} /> Finalizar Sesión</>}
-            </button>
-
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  return (
-    <DashboardLayout userName={session?.user?.name}>
-      <div className="p-4 md:p-10 font-sans text-slate-200 min-h-screen">
-        <div className="max-w-5xl mx-auto space-y-10">
-          <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
-
-          <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/[0.02] p-6 rounded-3xl border border-white/5 shadow-xl gap-4">
-            <div>
-              <h1 className="text-2xl font-black italic uppercase text-white tracking-tighter flex items-center gap-2">
-                Entrenamiento <span className="text-cyan-500">En Vivo</span> <Activity className="text-cyan-400" size={24} />
-              </h1>
-            </div>
-            <button 
-              onClick={() => { 
-                if (!isPro && templates.length >= 3 && !isBuilding) {
-                  alert("🔒 Límite de la cuenta Free alcanzado.\n\nActualmente tienes 3 templates guardados. Para crear rutinas ilimitadas y desbloquear el análisis avanzado, actualiza a Fitmo Pro.");
-                  return; 
-                }
-
-                setIsBuilding(!isBuilding); 
-                if (isBuilding) { 
-                  setEditingTemplateId(null); 
-                  setTemplateName(''); 
-                  setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]); 
-                } 
-              }}
-              className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
-            >
-              {isBuilding ? <X size={16} /> : <Plus size={16} />} 
-              {isBuilding ? 'Cancelar' : 'Crear Template'}
-            </button>
-          </div>
-
-          {isBuilding && (
-            <div className="bg-[#0a0a0a] border border-cyan-500/30 p-6 md:p-8 rounded-[2.5rem] shadow-[0_0_40px_rgba(34,211,238,0.05)] animate-in slide-in-from-top-4">
-              <input type="text" placeholder="Nombre de la Rutina (Ej. Día de Empuje)" value={templateName} onChange={(e) => setTemplateName(e.target.value)} className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 text-lg outline-none text-white font-black mb-6" />
-
-              <div className="space-y-4 mb-6">
-                {builderExercises.map((ex, idx) => (
-                  <div key={ex.id} className="grid grid-cols-12 gap-3 items-center bg-white/[0.02] p-3 rounded-2xl border border-white/5 relative group">
-                    {builderExercises.length > 1 && (<button onClick={() => setBuilderExercises(builderExercises.filter(e => e.id !== ex.id))} className="absolute -right-2 -top-2 bg-red-500/20 text-red-400 p-1.5 rounded-full border border-red-500/30 z-10 hover:bg-red-500 hover:text-white"><X size={12} /></button>)}
-                    
-                    <div className="col-span-12 md:col-span-3">
-                      <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none" value={ex.category} onChange={(e) => { const n = [...builderExercises]; n[idx].category = e.target.value; n[idx].name = ''; setBuilderExercises(n); }}>
-                        <option value="">Músculo</option>
-                        {Object.keys(EXERCISES_DATABASE).map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-12 md:col-span-3">
-                      <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none disabled:opacity-50" value={ex.name} onChange={(e) => { const n = [...builderExercises]; n[idx].name = e.target.value; setBuilderExercises(n); }} disabled={!ex.category}>
-                        <option value="">Ejercicio</option>
-                        {ex.category && EXERCISES_DATABASE[ex.category]?.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <p className="text-[8px] text-slate-500 font-black uppercase text-center mb-1">Series</p>
-                      <input type="number" value={ex.sets} onChange={(e) => { const n = [...builderExercises]; n[idx].sets = parseInt(e.target.value) || 0; setBuilderExercises(n); }} className="w-full bg-[#050505] p-2 rounded-xl border border-white/10 text-xs text-center text-white font-bold outline-none" />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                       <p className="text-[8px] text-slate-500 font-black uppercase text-center mb-1">Reps</p>
-                      <input type="text" value={ex.reps} onChange={(e) => { const n = [...builderExercises]; n[idx].reps = e.target.value; setBuilderExercises(n); }} className="w-full bg-[#050505] p-2 rounded-xl border border-white/10 text-xs text-center text-white font-bold outline-none" />
-                    </div>
-                    <div className="col-span-4 md:col-span-2">
-                      <p className="text-[8px] text-cyan-500 font-black uppercase text-center mb-1">Descanso (s)</p>
-                      <input type="number" placeholder="90" value={ex.rest_time} onChange={(e) => { const n = [...builderExercises]; n[idx].rest_time = parseInt(e.target.value) || 0; setBuilderExercises(n); }} className="w-full bg-cyan-500/10 p-2 rounded-xl border border-cyan-500/20 text-xs text-center text-cyan-400 font-black outline-none" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-4">
-                <button onClick={() => setBuilderExercises([...builderExercises, { id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }])} className="flex-1 py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest">+ Ejercicio</button>
-                <button onClick={handleSaveTemplate} className="flex-1 bg-cyan-600 hover:bg-cyan-500 py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest shadow-lg">{editingTemplateId ? 'Actualizar' : 'Guardar'}</button>
-              </div>
-            </div>
           )}
+        </section>
 
-          {!isBuilding && templates.map(template => (
-             <div key={template.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl mb-6 relative group">
-                <div className="absolute top-6 right-6 flex gap-2">
-                  <button onClick={() => handleEditInit(template)} className="p-2 text-slate-400 hover:text-cyan-400 bg-white/5 rounded-xl"><Edit3 size={14} /></button>
-                  <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 text-slate-400 hover:text-red-400 bg-white/5 rounded-xl"><Trash2 size={14} /></button>
-                </div>
-                <h4 className="text-xl font-black text-white italic mb-4">{template.name}</h4>
-                <div className="space-y-2 mb-6">
-                  {template.exercises.map((ex: any) => (
-                    <div key={ex.id} className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-bold">{ex.exercise_name}</span>
-                      <span className="text-slate-600 font-black">{ex.target_sets}x{ex.target_reps} • <span className="text-cyan-500">{ex.rest_time}s</span></span>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => startWorkout(template)} className="w-full bg-[#0a0a0a] border border-white/5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2">
-                  <Play size={14} fill="currentColor" /> Iniciar Sesión
+        {/* --- COLUMNA DERECHA: EL BUSCADOR / CATÁLOGO (Sticky) --- */}
+        <aside className="bg-[#0a0a0a] p-6 rounded-3xl border border-white/5 space-y-8 sticky top-28 lg:h-[calc(100vh-140px)] flex flex-col shadow-inner">
+          
+          <div className="flex items-center gap-3 text-cyan-400">
+            <Search size={20} />
+            <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">Catálogo de ejercicios</h3>
+          </div>
+
+          <p className="text-slate-500 text-[11px] font-medium leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5">
+            Selecciona un grupo muscular para ver los ejercicios disponibles. Si el tuyo no aparece, ¡crealo al instante!
+          </p>
+
+          {/* Lista de Accordions de Grupos Musculares */}
+          <div className="space-y-3 flex-grow overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/5">
+            {muscleGroups.map(muscle => (
+              <div key={muscle} className="bg-[#050505] border border-white/5 rounded-2xl overflow-hidden group">
+                
+                {/* Header del Accordion */}
+                <button 
+                  onClick={() => setActiveMuscleGroup(activeMuscleGroup === muscle ? null : muscle)}
+                  className="w-full flex items-center justify-between p-5 text-left group-hover:bg-white/5 transition-colors"
+                >
+                  <span className={`text-xs font-bold uppercase tracking-widest ${activeMuscleGroup === muscle ? 'text-cyan-400' : 'text-slate-300'}`}>
+                    {muscle}
+                  </span>
+                  <Zap size={16} className={`${activeMuscleGroup === muscle ? 'text-cyan-400' : 'text-slate-700'} transition-colors`} />
                 </button>
-             </div>
-          ))}
 
-        </div>
+                {/* Contenido Expandido: Lista de Ejercicios */}
+                {activeMuscleGroup === muscle && (
+                  <div className="px-5 pb-5 pt-1 space-y-4 animate-in slide-in-from-top-1 duration-200">
+                    
+                    {/* --- EL BOTÓN MÁGICO PARA MVPs --- */}
+                    <button 
+                      onClick={() => openNewExerciseModal(muscle)} // Abrimos modal con el grupo actual
+                      className="w-full flex items-center gap-3 bg-violet-600/10 hover:bg-violet-600/20 border border-violet-500/20 p-3.5 rounded-xl transition-colors group/new"
+                    >
+                      <Plus size={16} className="text-violet-400 shrink-0" />
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-white group-hover/new:text-violet-200">
+                        ➕ Nuevo Ejercicio <span className='text-slate-500'> en {muscle}</span>
+                      </span>
+                    </button>
+
+                    <p className="text-[10px] text-slate-600 uppercase tracking-widest font-black pt-2 pb-1 pl-1">Ejercicios Existentes ({exercisesInCatalogByMuscle(muscle).length})</p>
+
+                    {/* Lista de ejercicios filtrada */}
+                    {exercisesInCatalogByMuscle(muscle).length === 0 ? (
+                      <p className='text-slate-700 text-[10px] text-center pt-3 italic'>No hay ejercicios para {muscle} aún.</p>
+                    ) : (
+                      exercisesInCatalogByMuscle(muscle).map(catalogEx => (
+                        <div key={catalogEx.id} className="flex items-center justify-between bg-[#0a0a0a] p-3 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+                          <span className="text-sm font-semibold text-slate-200">{catalogEx.name}</span>
+                          <button 
+                            onClick={() => handleAddExistingToTemplate(catalogEx)}
+                            className="text-cyan-600 hover:text-cyan-400 bg-cyan-400/5 p-1.5 rounded-md"
+                            title='Agregar al template'
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+        </aside>
       </div>
-    </DashboardLayout>
+    </main>
   );
 }
