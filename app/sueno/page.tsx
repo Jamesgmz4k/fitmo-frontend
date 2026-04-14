@@ -15,11 +15,15 @@ export default function SuenoPage() {
   const [isPro, setIsPro] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Estados Dinámicos (NUEVO)
+  const [lastMuscleTrained, setLastMuscleTrained] = useState<string | null>(null);
+  const [recoveryScore, setRecoveryScore] = useState(70); // Empezamos en un base de 70
+
   // Estados de la Calculadora REM
   const [wakeTime, setWakeTime] = useState('06:30');
   const [sleepSuggestions, setSleepSuggestions] = useState<{ time: string, cycles: number, hours: number }[]>([]);
 
-  // Estados del Checklist (Solo visuales por ahora)
+  // Estados del Checklist
   const [habits, setHabits] = useState([
     { id: 1, text: 'Cero pantallas 1 hora antes', done: false },
     { id: 2, text: 'Última comida hace >2 horas', done: false },
@@ -27,23 +31,41 @@ export default function SuenoPage() {
     { id: 4, text: 'Suplementación (Magnesio/Zinc)', done: false },
   ]);
 
-  // Simulación de carga del perfil
+  // Carga de Datos Completa (NUEVO)
   useEffect(() => {
-    const checkProStatus = async () => {
+    const fetchInitialData = async () => {
       if (!userId) return;
       try {
-        const res = await apiClient(`/api/profile/?user_id=${userId}`);
-        if (res.ok) {
-          const data = await res.json();
+        // A) Verificamos si es Pro
+        const resPro = await apiClient(`/api/profile/?user_id=${userId}`);
+        if (resPro.ok) {
+          const data = await resPro.json();
           setIsPro(data.is_pro);
         }
+
+        // B) Buscamos su último entrenamiento real
+        const resWorkouts = await apiClient('/api/workouts/');
+        if (resWorkouts.ok) {
+          const workouts = await resWorkouts.json();
+          // Filtramos solo los del usuario actual y ordenamos por ID/fecha (el más reciente primero)
+          const userWorkouts = workouts
+            .filter((w: any) => w.user?.toString() === userId?.toString())
+            .sort((a: any, b: any) => b.id - a.id);
+          
+          if (userWorkouts.length > 0) {
+            // Tomamos el último y extraemos el músculo (Ej: de "Pecho: Press..." saca "Pecho")
+            const latestTitle = userWorkouts[0].title;
+            const muscle = latestTitle.split(':')[0]?.trim();
+            if (muscle) setLastMuscleTrained(muscle);
+          }
+        }
       } catch (error) {
-        console.error("Error cargando estatus:", error);
+        console.error("Error cargando datos:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    checkProStatus();
+    fetchInitialData();
   }, [userId]);
 
   // Lógica de la Calculadora REM (Ciclos de 90 minutos)
@@ -73,8 +95,33 @@ export default function SuenoPage() {
     setSleepSuggestions(suggestions);
   }, [wakeTime]);
 
-  const toggleHabit = (id: number) => {
-    setHabits(habits.map(h => h.id === id ? { ...h, done: !h.done } : h));
+  // Guardar Hábitos y Actualizar Score (NUEVO)
+  const toggleHabit = async (id: number) => {
+    const updatedHabits = habits.map(h => h.id === id ? { ...h, done: !h.done } : h);
+    setHabits(updatedHabits);
+
+    // Lógica simple para el Score: 70 base + (habitos * 7.5) = Max 100
+    const completedCount = updatedHabits.filter(h => h.done).length;
+    setRecoveryScore(70 + (completedCount * 7.5));
+
+    // Mapeamos los IDs a los nombres de tu backend
+    const payload = {
+      user_id: userId,
+      wake_time: wakeTime,
+      no_screens: updatedHabits.find(h => h.id === 1)?.done || false,
+      light_dinner: updatedHabits.find(h => h.id === 2)?.done || false,
+      dark_room: updatedHabits.find(h => h.id === 3)?.done || false,
+      supplements: updatedHabits.find(h => h.id === 4)?.done || false,
+    };
+
+    try {
+      await apiClient('/api/save-sleep/', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    } catch (error) {
+      console.error("Error guardando hábitos de sueño", error);
+    }
   };
 
   return (
@@ -170,16 +217,22 @@ export default function SuenoPage() {
                     <div className="relative w-48 h-48 flex items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90">
                         <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-white/5" />
-                        <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray="552" strokeDashoffset="110" className="text-indigo-500 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" strokeLinecap="round" />
+                        {/* Se actualiza el anillo verde/indigo de acuerdo al score real */}
+                        <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray="552" strokeDashoffset={552 - (552 * recoveryScore) / 100} className="text-indigo-500 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all duration-1000 ease-out" strokeLinecap="round" />
                       </svg>
                       <div className="absolute flex flex-col items-center">
-                        <span className="text-5xl font-black italic text-white">82<span className="text-xl text-indigo-400">%</span></span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Listo para entrenar</span>
+                        <span className="text-5xl font-black italic text-white">{recoveryScore}<span className="text-xl text-indigo-400">%</span></span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                          {recoveryScore >= 90 ? 'Óptimo' : recoveryScore >= 75 ? 'Buen Nivel' : 'Bajo'}
+                        </span>
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-400 mt-8 leading-relaxed px-4">
-                      Tu volumen de ayer en Press Recto fue altísimo. Basado en tus ciclos de sueño planeados, tus fibras musculares estarán recuperadas.
+                    <p className="text-xs text-slate-400 mt-8 leading-relaxed px-4 h-12">
+                      {lastMuscleTrained 
+                        ? `Tu intensidad en tu última sesión de ${lastMuscleTrained} fue demandante. Cumplir tus ciclos de sueño hoy es vital para reparar esas fibras musculares.`
+                        : `Tus músculos están descansados. Utiliza la calculadora REM para planificar tu sueño y llegar con máxima energía a tu próxima sesión.`
+                      }
                     </p>
                   </section>
                 </div>
