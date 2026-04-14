@@ -3,6 +3,7 @@ import DashboardHeader from '../components/dashboard/DashboardHeader';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import Hero from './Hero';
+import AuthForm from '../components/auth/AuthForm';
 import confetti from 'canvas-confetti';
 import { signIn, signOut, useSession } from "next-auth/react";
 import HeatMap from '../components/dashboard/HeatMap';
