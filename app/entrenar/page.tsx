@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
-import { apiClient } from '../../lib/apiClient'; // <-- El Santo Grial importado
+import { apiClient } from '../../lib/apiClient'; 
 import { useSession, signOut } from 'next-auth/react';
 import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-const EXERCISES_DATABASE: Record<string, string[]> = {
+// 1. Cambiamos el nombre a DEFAULT_CATALOG para usarlo como base
+const DEFAULT_CATALOG: Record<string, string[]> = {
   "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
   "Triceps": ["Jalón con polea barra recta", "Overhead extensions barra recta", "Press de triceps", "Skullcrushers", "Jalon con polea unilateral", "Fondos"],
   "Bicep": ["Curl mancuernas", "Curl barra z", "Martillos", "Curl en polea barra recta", "Curl en maquina", "Curl predicador", "Curl concentrado", "Bayessian", "Curl en banco inclinado con mancuernas", "Spider curl"],
@@ -21,6 +22,15 @@ const EXERCISES_DATABASE: Record<string, string[]> = {
 export default function EntrenarPage() {
   const { data: session } = useSession();
   const userId = (session?.user as any)?.id;
+
+  // 2. ESTADO DEL CATÁLOGO DINÁMICO
+  const [catalog, setCatalog] = useState<Record<string, string[]>>(DEFAULT_CATALOG);
+
+  // 3. ESTADOS PARA AGREGAR NUEVO EJERCICIO
+  const [showAddEx, setShowAddEx] = useState(false);
+  const [newExCat, setNewExCat] = useState('');
+  const [newExName, setNewExName] = useState('');
+  const [isSavingEx, setIsSavingEx] = useState(false);
 
   const [templates, setTemplates] = useState<any[]>([]);
   const [prediction, setPrediction] = useState<any>(null);
@@ -61,7 +71,6 @@ export default function EntrenarPage() {
   const fetchData = async () => {
     if (!userId) return;
     try {
-      // Usando apiClient
       const resTemplates = await apiClient(`/api/templates/?user_id=${userId}`);
       if (resTemplates.ok) setTemplates(await resTemplates.json());
       
@@ -77,10 +86,64 @@ export default function EntrenarPage() {
         setIsPro(profileData.is_pro);
       }
 
+      // 4. CARGAMOS LOS EJERCICIOS PERSONALIZADOS DEL USUARIO DESDE LA DB
+      const resEx = await apiClient(`/api/exercises/`);
+      if (resEx.ok) {
+        const customEx = await resEx.json();
+        // Hacemos una copia profunda del catálogo por defecto
+        const mergedCatalog = JSON.parse(JSON.stringify(DEFAULT_CATALOG)); 
+        
+        customEx.forEach((ex: any) => {
+          // Tu backend puede devolver category o muscle_group, validamos ambos
+          const cat = ex.category || ex.muscle_group; 
+          if (cat) {
+            if (!mergedCatalog[cat]) mergedCatalog[cat] = [];
+            // Solo lo agregamos si no existe ya
+            if (!mergedCatalog[cat].includes(ex.name)) {
+              mergedCatalog[cat].push(ex.name);
+            }
+          }
+        });
+        setCatalog(mergedCatalog);
+      }
+
     } catch (error) { console.error("Error cargando:", error); }
   };
 
   useEffect(() => { fetchData(); }, [userId]);
+
+  // 5. FUNCIÓN PARA CREAR EL EJERCICIO EN LA BASE DE DATOS
+  const handleAddNewExercise = async () => {
+    if (!newExCat || !newExName.trim()) return;
+    setIsSavingEx(true);
+    try {
+      const res = await apiClient('/api/exercises/', {
+        method: 'POST',
+        body: JSON.stringify({ category: newExCat, name: newExName.trim() })
+      });
+      
+      if (res.ok) {
+        // Actualizamos el estado local para que aparezca instantáneamente en el dropdown
+        setCatalog(prev => {
+          const next = {...prev};
+          if (!next[newExCat]) next[newExCat] = [];
+          next[newExCat].push(newExName.trim());
+          return next;
+        });
+        // Cerramos y limpiamos el formulario
+        setShowAddEx(false);
+        setNewExName('');
+        setNewExCat('');
+      } else {
+        alert("Error al guardar el ejercicio.");
+      }
+    } catch (e) { 
+      console.error(e); 
+      alert("Error de conexión.");
+    } finally {
+      setIsSavingEx(false);
+    }
+  };
 
   const getLastPerformance = (exerciseName: string) => {
     const userLogs = workouts.filter(w => w.user?.toString() === userId?.toString() && w.title.includes(exerciseName));
@@ -112,7 +175,6 @@ export default function EntrenarPage() {
         }))
       };
       
-      // Usando apiClient
       const url = editingTemplateId ? `/api/templates/${editingTemplateId}/` : '/api/templates/';
       const res = await apiClient(url, { 
         method: editingTemplateId ? 'PUT' : 'POST', 
@@ -137,7 +199,6 @@ export default function EntrenarPage() {
 
   const handleDeleteTemplate = async (id: number) => {
     if (!confirm("¿Seguro que quieres eliminar esta rutina?")) return;
-    // Usando apiClient
     const res = await apiClient(`/api/templates/${id}/`, { method: 'DELETE' });
     if (res.ok) fetchData();
   };
@@ -207,7 +268,6 @@ export default function EntrenarPage() {
         const repsString = validSets.map(s => s.rep).join(', ');
         const fullTitle = `${ex.category}: ${ex.exercise_name} | ${weightInKg}kg | Reps: ${repsString}`;
         
-        // Usando apiClient
         const res = await apiClient('/api/workouts/', {
           method: 'POST',
           body: JSON.stringify({ 
@@ -451,15 +511,17 @@ export default function EntrenarPage() {
                     {builderExercises.length > 1 && (<button onClick={() => setBuilderExercises(builderExercises.filter(e => e.id !== ex.id))} className="absolute -right-2 -top-2 bg-red-500/20 text-red-400 p-1.5 rounded-full border border-red-500/30 z-10 hover:bg-red-500 hover:text-white"><X size={12} /></button>)}
                     
                     <div className="col-span-12 md:col-span-3">
+                      {/* USAMOS EL ESTADO catalog AQUÍ */}
                       <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none" value={ex.category} onChange={(e) => { const n = [...builderExercises]; n[idx].category = e.target.value; n[idx].name = ''; setBuilderExercises(n); }}>
                         <option value="">Músculo</option>
-                        {Object.keys(EXERCISES_DATABASE).map(m => <option key={m} value={m}>{m}</option>)}
+                        {Object.keys(catalog).map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div className="col-span-12 md:col-span-3">
+                      {/* USAMOS EL ESTADO catalog AQUÍ */}
                       <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none disabled:opacity-50" value={ex.name} onChange={(e) => { const n = [...builderExercises]; n[idx].name = e.target.value; setBuilderExercises(n); }} disabled={!ex.category}>
                         <option value="">Ejercicio</option>
-                        {ex.category && EXERCISES_DATABASE[ex.category]?.map(n => <option key={n} value={n}>{n}</option>)}
+                        {ex.category && catalog[ex.category]?.map(n => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </div>
                     <div className="col-span-4 md:col-span-2">
@@ -478,9 +540,55 @@ export default function EntrenarPage() {
                 ))}
               </div>
 
+              {/* ---------------- BOTÓN DE NUEVO EJERCICIO ---------------- */}
+              <div className="mb-6">
+                {!showAddEx ? (
+                  <button 
+                    onClick={() => setShowAddEx(true)} 
+                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-4 py-3 rounded-xl border border-cyan-500/20"
+                  >
+                    <Plus size={14} /> Expandir Catálogo Global
+                  </button>
+                ) : (
+                  <div className="bg-cyan-500/5 border border-cyan-500/20 p-4 rounded-2xl flex flex-col md:flex-row gap-3 items-center animate-in fade-in zoom-in duration-200">
+                    <select 
+                      className="w-full md:w-1/3 bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none" 
+                      value={newExCat} 
+                      onChange={e => setNewExCat(e.target.value)}
+                    >
+                      <option value="">Músculo</option>
+                      {Object.keys(catalog).map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <input 
+                      type="text" 
+                      placeholder="Nombre (Ej. Muscle Up)" 
+                      className="w-full md:w-1/3 bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-white font-bold outline-none" 
+                      value={newExName} 
+                      onChange={e => setNewExName(e.target.value)} 
+                    />
+                    <div className="flex gap-2 w-full md:w-auto flex-1">
+                      <button 
+                        onClick={handleAddNewExercise} 
+                        disabled={isSavingEx || !newExCat || !newExName} 
+                        className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl disabled:opacity-50 transition-colors"
+                      >
+                        Guardar
+                      </button>
+                      <button 
+                        onClick={() => setShowAddEx(false)} 
+                        className="px-4 bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-widest py-3 rounded-xl transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* ---------------------------------------------------------- */}
+
               <div className="flex gap-4">
-                <button onClick={() => setBuilderExercises([...builderExercises, { id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }])} className="flex-1 py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest">+ Ejercicio</button>
-                <button onClick={handleSaveTemplate} className="flex-1 bg-cyan-600 hover:bg-cyan-500 py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest shadow-lg">{editingTemplateId ? 'Actualizar' : 'Guardar'}</button>
+                <button onClick={() => setBuilderExercises([...builderExercises, { id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }])} className="flex-1 py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">+ Serie / Ejercicio</button>
+                <button onClick={handleSaveTemplate} className="flex-1 bg-gradient-to-r from-violet-600 to-cyan-600 hover:scale-[1.02] transition-transform py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest shadow-lg">{editingTemplateId ? 'Actualizar Rutina' : 'Guardar Rutina'}</button>
               </div>
             </div>
           )}
@@ -488,8 +596,8 @@ export default function EntrenarPage() {
           {!isBuilding && templates.map(template => (
              <div key={template.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl mb-6 relative group">
                 <div className="absolute top-6 right-6 flex gap-2">
-                  <button onClick={() => handleEditInit(template)} className="p-2 text-slate-400 hover:text-cyan-400 bg-white/5 rounded-xl"><Edit3 size={14} /></button>
-                  <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 text-slate-400 hover:text-red-400 bg-white/5 rounded-xl"><Trash2 size={14} /></button>
+                  <button onClick={() => handleEditInit(template)} className="p-2 text-slate-400 hover:text-cyan-400 bg-white/5 rounded-xl transition-colors"><Edit3 size={14} /></button>
+                  <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 text-slate-400 hover:text-red-400 bg-white/5 rounded-xl transition-colors"><Trash2 size={14} /></button>
                 </div>
                 <h4 className="text-xl font-black text-white italic mb-4">{template.name}</h4>
                 <div className="space-y-2 mb-6">
