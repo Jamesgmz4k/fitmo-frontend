@@ -16,11 +16,7 @@ import {
 import PersonalRecords from '../components/dashboard/PersonalRecords';
 import ProgressionChart from '../components/dashboard/ProgressionChart';
 import ExerciseCatalog from '../components/dashboard/ExerciseCatalog';
-import WorkoutForm from '../components/dashboard/WorkoutForm';
 import HistoryFeed from '../components/dashboard/HistoryFeed';
-import HeatMapPaywall from '../components/dashboard/Paywall';
-import Paywall from '../components/dashboard/Paywall';
-import AuthForm from '../components/auth/AuthForm';
 
 const EXERCISES_DATABASE: Record<string, string[]> = {
   "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
@@ -51,15 +47,8 @@ export default function Home() {
   // Catálogo Personalizado
   const [customExercises, setCustomExercises] = useState<Record<string, string[]>>({});
   
-  // Formulario de Entrenamiento
-  const [muscleGroup, setMuscleGroup] = useState('');
-  const [exerciseType, setExerciseType] = useState('');
-  const [weight, setWeight] = useState('');
-  const [sets, setSets] = useState([{ id: 1, reps: '' }]);
-  
   // UI y Análisis
   const [selectedAnalysisExercise, setSelectedAnalysisExercise] = useState<string>('');
-  const [editingId, setEditingId] = useState<number | null>(null);
   
   // ==========================================
   // 2. MEMORIAS (useMemo)
@@ -123,7 +112,6 @@ export default function Home() {
       const weightVal = weightMatch ? parseInt(weightMatch[1]) : 0;
       const repsArray = repsMatch ? repsMatch[1].split(',').map(Number) : [];
       
-      // NUEVA LÓGICA: Fitmo Hypertrophy Score
       const totalReps = repsArray.reduce((a: number, b: number) => a + b, 0);      
       const hypertrophyScore = (weightVal * 10) + totalReps;
       
@@ -207,7 +195,6 @@ export default function Home() {
       const rsMatch = t.match(/Reps:\s*(.+)/);
       const reps = rsMatch ? rsMatch[1].split(',').map(Number) : [];
       
-      // Mismo Score de Hipertrofia para que coincida con la gráfica
      const totalReps = reps.reduce((a: number, r: number) => a + r, 0);
      return (w * 10) + totalReps;
     };
@@ -227,82 +214,6 @@ export default function Home() {
     }
     
     return { label: "Estable", color: "text-amber-400", bg: "bg-amber-500/10", icon: <Target size={12}/> };
-  };
-
-  const handleEditInit = (workout: any) => {
-    const [mPart, remainder] = workout.title.split(':');
-    const [ePart, wPart, rPart] = remainder.split('|');
-    setMuscleGroup(mPart.trim());
-    setExerciseType(ePart.trim());
-    setWeight(wPart.replace('kg', '').trim());
-    const repsArr = rPart.replace('Reps:', '').trim().split(',').map((r: string, i: number) => ({
-      id: i + 1,
-      reps: r.trim()
-    }));
-    setSets(repsArr);
-    setEditingId(workout.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleWorkoutSubmit = async (e: React.FormEvent, directData?: any) => {
-    if (e) e.preventDefault();
-    
-    const finalMuscle = directData?.muscleGroup || muscleGroup;
-    const finalExercise = directData?.exerciseType || exerciseType;
-    const finalWeight = directData?.weight || weight;
-    const finalSets = directData?.sets || sets;
-
-    if (!finalMuscle || !finalExercise || !finalWeight || !userId) {
-      alert("Faltan datos o la sesión no es válida.");
-      return;
-    }
-
-    const repsString = finalSets.map((s: any) => s.reps).join(',');
-    const fullTitle = `${finalMuscle}: ${finalExercise} | ${finalWeight}kg | Reps: ${repsString}`;
-    
-    const exerciseHistory = workouts.filter(w => 
-      w.user?.toString() === userId.toString() && 
-      w.title.includes(finalExercise)
-    );
-
-    const maxWeightHistory = Math.max(...exerciseHistory.map(w => {
-      const match = w.title.match(/(\d+)kg/);
-      return match ? parseInt(match[1]) : 0;
-    }), 0);
-
-    if (parseInt(finalWeight) > maxWeightHistory && exerciseHistory.length > 0) {
-      confetti({ 
-        particleCount: 150, 
-        spread: 70, 
-        origin: { y: 0.6 },
-        colors: ['#8b5cf6', '#22d3ee'] 
-      });
-    }
-
-    const url = editingId 
-      ? `${API_URL}/api/workouts/${editingId}/` 
-      : `${API_URL}/api/workouts/`;
-      
-    const method = editingId ? 'PUT' : 'POST';
-
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        title: fullTitle, 
-        user: parseInt(userId) 
-      }),
-    });
-
-    if (res.ok) {
-      setMuscleGroup(''); setExerciseType(''); setWeight(''); setSets([{ id: 1, reps: '' }]);
-      setEditingId(null);
-      fetchData(); 
-    } else {
-      const errorData = await res.json();
-      console.error("Error de Django:", errorData);
-      alert("Error al guardar el entrenamiento. Revisa la consola.");
-    }
   };
 
   const handleAddCustomExercise = async (category: string, name: string) => {
@@ -355,27 +266,6 @@ export default function Home() {
                  
             <PersonalRecords records={personalRecords} />
 
-            <WorkoutForm 
-                exercisesDatabase={ALL_EXERCISES} 
-                editingId={editingId}
-                onCancelEdit={() => {
-                  setEditingId(null);
-                  setMuscleGroup('');
-                  setExerciseType('');
-                  setWeight('');
-                  setSets([{ id: Date.now(), reps: '' }]);
-                }}
-                onSubmit={(formData) => {
-                  handleWorkoutSubmit(null as any, formData);
-                }}
-                initialData={{
-                  muscle: muscleGroup,
-                  exercise: exerciseType,
-                  weight: weight,
-                  sets: sets
-                }}
-              />
-
             <ExerciseCatalog 
               databaseCategories={Object.keys(EXERCISES_DATABASE)} 
               onAddExercise={handleAddCustomExercise} 
@@ -402,10 +292,6 @@ export default function Home() {
             <HistoryFeed 
               isPro={isPro}
               workouts={workouts.filter(w => w.user?.toString() === userId?.toString()).sort((a,b) => b.id - a.id)} 
-              onEdit={(workout) => {
-                handleEditInit(workout);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
               onDelete={(id) => {
                 fetch(`${API_URL}/api/workouts/${id}/`, { method: 'DELETE' })
                   .then(() => fetchData());
