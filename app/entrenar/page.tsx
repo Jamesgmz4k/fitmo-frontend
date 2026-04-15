@@ -5,10 +5,9 @@ import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import { apiClient } from '../../lib/apiClient'; 
 import { useSession, signOut } from 'next-auth/react';
-import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy } from 'lucide-react';
+import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy, Info } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-// 1. Cambiamos el nombre a DEFAULT_CATALOG para usarlo como base
 const DEFAULT_CATALOG: Record<string, string[]> = {
   "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
   "Triceps": ["Jalón con polea barra recta", "Overhead extensions barra recta", "Press de triceps", "Skullcrushers", "Jalon con polea unilateral", "Fondos"],
@@ -23,10 +22,11 @@ export default function EntrenarPage() {
   const { data: session } = useSession();
   const userId = (session?.user as any)?.id;
 
-  // 2. ESTADO DEL CATÁLOGO DINÁMICO
   const [catalog, setCatalog] = useState<Record<string, string[]>>(DEFAULT_CATALOG);
 
-  // 3. ESTADOS PARA AGREGAR NUEVO EJERCICIO
+  // NUEVO: Estado del tutorial
+  const [showTutorial, setShowTutorial] = useState(false);
+
   const [showAddEx, setShowAddEx] = useState(false);
   const [newExCat, setNewExCat] = useState('');
   const [newExName, setNewExName] = useState('');
@@ -49,6 +49,18 @@ export default function EntrenarPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
   
   const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number } | null>(null);
+
+  // EFECTO DE LECTURA DE TUTORIAL EN LA URL (Método seguro para Vercel)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tutorial') === 'true') {
+        setShowTutorial(true);
+        // Opcional: limpiar la URL para que no vuelva a salir si recargan
+        window.history.replaceState(null, '', '/entrenar');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -86,19 +98,15 @@ export default function EntrenarPage() {
         setIsPro(profileData.is_pro);
       }
 
-      // 4. CARGAMOS LOS EJERCICIOS PERSONALIZADOS DEL USUARIO DESDE LA DB
       const resEx = await apiClient(`/api/exercises/`);
       if (resEx.ok) {
         const customEx = await resEx.json();
-        // Hacemos una copia profunda del catálogo por defecto
         const mergedCatalog = JSON.parse(JSON.stringify(DEFAULT_CATALOG)); 
         
         customEx.forEach((ex: any) => {
-          // Tu backend puede devolver category o muscle_group, validamos ambos
           const cat = ex.category || ex.muscle_group; 
           if (cat) {
             if (!mergedCatalog[cat]) mergedCatalog[cat] = [];
-            // Solo lo agregamos si no existe ya
             if (!mergedCatalog[cat].includes(ex.name)) {
               mergedCatalog[cat].push(ex.name);
             }
@@ -112,7 +120,6 @@ export default function EntrenarPage() {
 
   useEffect(() => { fetchData(); }, [userId]);
 
-  // 5. FUNCIÓN PARA CREAR EL EJERCICIO EN LA BASE DE DATOS
   const handleAddNewExercise = async () => {
     if (!newExCat || !newExName.trim()) return;
     setIsSavingEx(true);
@@ -123,14 +130,12 @@ export default function EntrenarPage() {
       });
       
       if (res.ok) {
-        // Actualizamos el estado local para que aparezca instantáneamente en el dropdown
         setCatalog(prev => {
           const next = {...prev};
           if (!next[newExCat]) next[newExCat] = [];
           next[newExCat].push(newExName.trim());
           return next;
         });
-        // Cerramos y limpiamos el formulario
         setShowAddEx(false);
         setNewExName('');
         setNewExCat('');
@@ -301,7 +306,6 @@ export default function EntrenarPage() {
     }
   };
 
-
   if (activeTemplate) {
     return (
       <DashboardLayout userName={session?.user?.name}>
@@ -470,6 +474,52 @@ export default function EntrenarPage() {
 
   return (
     <DashboardLayout userName={session?.user?.name}>
+      
+      {/* ---------------- MODAL DE TUTORIAL ---------------- */}
+      {showTutorial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/95 backdrop-blur-md p-4">
+          <div className="bg-[#0a0a0a] border border-cyan-500/30 w-full max-w-md rounded-[2.5rem] shadow-[0_0_80px_rgba(34,211,238,0.15)] overflow-hidden animate-in zoom-in-95">
+            
+            <div className="p-8 text-center relative">
+              <button onClick={() => setShowTutorial(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white bg-white/5 p-2 rounded-full transition-colors">
+                <X size={16} />
+              </button>
+
+              <div className="bg-cyan-500/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-cyan-500/20">
+                <Info size={32} className="text-cyan-400" />
+              </div>
+              
+              <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter mb-4">¿Cómo entrenar en Fitmo?</h2>
+              
+              <div className="space-y-4 text-left">
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <span className="text-cyan-400 font-black text-xs uppercase tracking-widest block mb-1">Paso 1: Crea un Template</span>
+                  <p className="text-slate-400 text-xs font-medium">Añade un título (Ej: "Día de Pecho") y selecciona los ejercicios que harás. Esto crea una plantilla base.</p>
+                </div>
+                
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <span className="text-violet-400 font-black text-xs uppercase tracking-widest block mb-1">Paso 2: Registra tus series</span>
+                  <p className="text-slate-400 text-xs font-medium">Usa tu plantilla para anotar los pesos y repeticiones de hoy. ¡Asegúrate de aplicar sobrecarga progresiva!</p>
+                </div>
+
+                <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                  <span className="text-emerald-400 font-black text-xs uppercase tracking-widest block mb-1">Paso 3: Guarda en tu historial</span>
+                  <p className="text-slate-400 text-xs font-medium">Al terminar, dale a guardar. Fitmo analizará tu volumen de hipertrofia y generará tu métrica de recuperación.</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => { setShowTutorial(false); setIsBuilding(true); }}
+                className="w-full mt-8 bg-gradient-to-r from-violet-600 to-cyan-600 text-white p-4 rounded-full font-black text-[11px] tracking-widest uppercase hover:scale-105 transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+              >
+                Entendido, ¡A Mutar!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --------------------------------------------------- */}
+
       <div className="p-4 md:p-10 font-sans text-slate-200 min-h-screen">
         <div className="max-w-5xl mx-auto space-y-10">
           <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
@@ -494,7 +544,7 @@ export default function EntrenarPage() {
                   setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]); 
                 } 
               }}
-              className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
+              className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2 hover:bg-white/10"
             >
               {isBuilding ? <X size={16} /> : <Plus size={16} />} 
               {isBuilding ? 'Cancelar' : 'Crear Template'}
@@ -511,17 +561,15 @@ export default function EntrenarPage() {
                     {builderExercises.length > 1 && (<button onClick={() => setBuilderExercises(builderExercises.filter(e => e.id !== ex.id))} className="absolute -right-2 -top-2 bg-red-500/20 text-red-400 p-1.5 rounded-full border border-red-500/30 z-10 hover:bg-red-500 hover:text-white"><X size={12} /></button>)}
                     
                     <div className="col-span-12 md:col-span-3">
-                      {/* USAMOS EL ESTADO catalog AQUÍ */}
                       <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none" value={ex.category} onChange={(e) => { const n = [...builderExercises]; n[idx].category = e.target.value; n[idx].name = ''; setBuilderExercises(n); }}>
                         <option value="">Músculo</option>
                         {Object.keys(catalog).map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div className="col-span-12 md:col-span-3">
-                      {/* USAMOS EL ESTADO catalog AQUÍ */}
                       <select className="w-full bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none disabled:opacity-50" value={ex.name} onChange={(e) => { const n = [...builderExercises]; n[idx].name = e.target.value; setBuilderExercises(n); }} disabled={!ex.category}>
                         <option value="">Ejercicio</option>
-                        {ex.category && catalog[ex.category]?.map(n => <option key={n} value={n}>{n}</option>)}
+                        {ex.category && Array.from(new Set(catalog[ex.category])).map((n, idx) => <option key={`${n}-${idx}`} value={n}>{n}</option>)}
                       </select>
                     </div>
                     <div className="col-span-4 md:col-span-2">
@@ -540,12 +588,21 @@ export default function EntrenarPage() {
                 ))}
               </div>
 
-              {/* ---------------- BOTÓN DE NUEVO EJERCICIO ---------------- */}
-              <div className="mb-6">
+              <div className="flex gap-4">
+                <button onClick={() => setBuilderExercises([...builderExercises, { id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }])} className="flex-1 py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">+ Serie / Ejercicio</button>
+                <button onClick={handleSaveTemplate} className="flex-1 bg-gradient-to-r from-violet-600 to-cyan-600 hover:scale-[1.02] transition-transform py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest shadow-lg">{editingTemplateId ? 'Actualizar Rutina' : 'Guardar Rutina'}</button>
+              </div>
+
+              {/* ---------------- BOTÓN DE NUEVO EJERCICIO (NUEVA UBICACIÓN) ---------------- */}
+              <div className="mt-8 pt-8 border-t border-white/5">
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest text-center mb-4">
+                  ¿No encuentras un ejercicio en la lista? Agrega tu ejercicio aquí
+                </p>
+                
                 {!showAddEx ? (
                   <button 
                     onClick={() => setShowAddEx(true)} 
-                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-4 py-3 rounded-xl border border-cyan-500/20"
+                    className="w-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-4 py-3 rounded-xl border border-cyan-500/20"
                   >
                     <Plus size={14} /> Expandir Catálogo Global
                   </button>
@@ -584,12 +641,8 @@ export default function EntrenarPage() {
                   </div>
                 )}
               </div>
-              {/* ---------------------------------------------------------- */}
+              {/* ---------------------------------------------------------------------------- */}
 
-              <div className="flex gap-4">
-                <button onClick={() => setBuilderExercises([...builderExercises, { id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }])} className="flex-1 py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">+ Serie / Ejercicio</button>
-                <button onClick={handleSaveTemplate} className="flex-1 bg-gradient-to-r from-violet-600 to-cyan-600 hover:scale-[1.02] transition-transform py-4 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest shadow-lg">{editingTemplateId ? 'Actualizar Rutina' : 'Guardar Rutina'}</button>
-              </div>
             </div>
           )}
 
@@ -608,7 +661,7 @@ export default function EntrenarPage() {
                     </div>
                   ))}
                 </div>
-                <button onClick={() => startWorkout(template)} className="w-full bg-[#0a0a0a] border border-white/5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2">
+                <button onClick={() => startWorkout(template)} className="w-full bg-[#0a0a0a] border border-white/5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2 hover:bg-white/5">
                   <Play size={14} fill="currentColor" /> Iniciar Sesión
                 </button>
              </div>

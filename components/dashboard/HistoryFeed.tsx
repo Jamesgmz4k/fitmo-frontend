@@ -11,7 +11,7 @@ interface HistoryFeedProps {
   getStatus: (exerciseName: string) => { label: string, color: string, bg: string, icon: React.ReactNode };
 }
 
-  export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDelete, getStatus }: HistoryFeedProps) {
+export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDelete, getStatus }: HistoryFeedProps) {
   const [warningModalData, setWarningModalData] = useState<any | null>(null);
   const [showRestInfo, setShowRestInfo] = useState(false);
 
@@ -24,7 +24,7 @@ interface HistoryFeedProps {
     return { score: (w * 10) + totalReps, weight: w, totalReps };
   };
 
-    const groupedWorkouts = (workouts || []).reduce((acc, workout) => {
+  const groupedWorkouts = (workouts || []).reduce((acc, workout) => {
     const title = workout.title || "";
     const [musclePart, rest1] = title.split(':');
     const muscle = musclePart?.trim() || "Músculo";
@@ -216,16 +216,15 @@ interface HistoryFeedProps {
                           <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-0.5">{w.muscle}</p>
                         </div>
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {onEdit && (
-                  <button onClick={() => onEdit?.(w)} className="p-1.5 bg-white/5 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors">
-                    <Edit3 size={12} />
-                  </button>
-                )}
-                <button onClick={() => onDelete(w.id)} className="p-1.5 bg-white/5 text-slate-400 hover:text-red-400 rounded-lg transition-colors">
-                  <Trash2 size={12} />
-                </button>
-</div>
-                      
+                          {onEdit && (
+                            <button onClick={() => onEdit?.(w)} className="p-1.5 bg-white/5 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors">
+                              <Edit3 size={12} />
+                            </button>
+                          )}
+                          <button onClick={() => onDelete(w.id)} className="p-1.5 bg-white/5 text-slate-400 hover:text-red-400 rounded-lg transition-colors">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="flex flex-wrap gap-1.5">
@@ -247,18 +246,33 @@ interface HistoryFeedProps {
           ))}
 
           {recentDates.length === 0 && (
-            <div className="text-center py-10 border border-dashed border-white/5 rounded-4xl">
-              <p className="text-slate-600 text-xs font-black uppercase tracking-widest">No hay entrenamientos recientes</p>
+            <div className="text-center py-12 border border-dashed border-cyan-500/30 rounded-[2rem] bg-cyan-500/5 flex flex-col items-center justify-center space-y-5 animate-in fade-in zoom-in duration-500">
+              <div className="bg-gradient-to-br from-violet-600/20 to-cyan-500/20 p-4 rounded-full border border-white/10">
+                <Zap className="text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]" size={32} />
+              </div>
+              <div>
+                <h3 className="text-white font-black italic text-2xl uppercase tracking-tighter mb-2">Tu Laboratorio está vacío</h3>
+                <p className="text-slate-400 text-xs max-w-sm mx-auto font-medium">
+                  Es hora de construir tu primer bloque de hipertrofia. Te guiaremos paso a paso en el proceso.
+                </p>
+              </div>
+              <Link 
+                href="/entrenar?tutorial=true" 
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 px-8 py-4 rounded-full font-black text-white text-[11px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+              >
+                Registrar mi primer entrenamiento <ChevronRight size={16} />
+              </Link>
             </div>
           )}
         </div>
 
-        {/* --- BOTÓN RESTAURADO --- */}
-        <div className="mt-8 pt-6 border-t border-white/5">
-          <Link href="/historial" className="w-full bg-white/5 p-4 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase hover:bg-white/10 transition-all text-white flex items-center justify-center gap-2 border border-white/5">
-            Ver historial completo <ArrowRight size={14} />
-          </Link>
-        </div>
+        {recentDates.length > 0 && (
+          <div className="mt-8 pt-6 border-t border-white/5">
+            <Link href="/historial" className="w-full bg-white/5 p-4 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase hover:bg-white/10 transition-all text-white flex items-center justify-center gap-2 border border-white/5">
+              Ver historial completo <ArrowRight size={14} />
+            </Link>
+          </div>
+        )}
 
       </section>
     </>
