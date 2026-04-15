@@ -3,10 +3,12 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import confetti from 'canvas-confetti';
 import { CheckCircle, Zap } from 'lucide-react';
+import posthog from 'posthog-js';
 
 export default function SuccessPage() {
   
   useEffect(() => {
+    posthog.capture('subscription_success_viewed');
     // Fiesta en la pantalla cuando el pago es exitoso
     confetti({
       particleCount: 150,

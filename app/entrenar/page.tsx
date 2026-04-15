@@ -7,6 +7,7 @@ import { apiClient } from '../../lib/apiClient';
 import { useSession, signOut } from 'next-auth/react';
 import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy, Info } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import posthog from 'posthog-js';
 
 const DEFAULT_CATALOG: Record<string, string[]> = {
   "Pecho": ["Press inclinado", "Press recto", "Peck flys maquina", "Peckdeck cable", "Press inclinado con mancuernas"],
@@ -130,6 +131,7 @@ export default function EntrenarPage() {
       });
       
       if (res.ok) {
+        posthog.capture('custom_exercise_added', { category: newExCat, name: newExName.trim() });
         setCatalog(prev => {
           const next = {...prev};
           if (!next[newExCat]) next[newExCat] = [];
@@ -142,8 +144,9 @@ export default function EntrenarPage() {
       } else {
         alert("Error al guardar el ejercicio.");
       }
-    } catch (e) { 
-      console.error(e); 
+    } catch (e) {
+      posthog.captureException(e);
+      console.error(e);
       alert("Error de conexión.");
     } finally {
       setIsSavingEx(false);
@@ -187,6 +190,10 @@ export default function EntrenarPage() {
       });
       
       if (res.ok) {
+        posthog.capture(editingTemplateId ? 'workout_template_updated' : 'workout_template_created', {
+          template_name: templateName,
+          exercise_count: builderExercises.length,
+        });
         setIsBuilding(false); setEditingTemplateId(null); setTemplateName('');
         setBuilderExercises([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
         fetchData();
@@ -205,10 +212,17 @@ export default function EntrenarPage() {
   const handleDeleteTemplate = async (id: number) => {
     if (!confirm("¿Seguro que quieres eliminar esta rutina?")) return;
     const res = await apiClient(`/api/templates/${id}/`, { method: 'DELETE' });
-    if (res.ok) fetchData();
+    if (res.ok) {
+      posthog.capture('workout_template_deleted', { template_id: id });
+      fetchData();
+    }
   };
 
   const startWorkout = (template: any) => {
+    posthog.capture('workout_session_started', {
+      template_name: template.name,
+      exercise_count: template.exercises.length,
+    });
     setActiveTemplate(template);
     const initialData: Record<number, any> = {};
     
@@ -291,16 +305,24 @@ export default function EntrenarPage() {
         }
       }
 
+      posthog.capture('workout_session_completed', {
+        template_name: activeTemplate.name,
+        exercise_count: activeTemplate.exercises.length,
+        had_new_record: hasNewRecord,
+      });
+
       if (hasNewRecord) {
-         confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, colors: ['#8b5cf6', '#22d3ee', '#10b981'] });
-         setShowSuccessModal(true);
+        posthog.capture('personal_record_achieved', { template_name: activeTemplate.name });
+        confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 }, colors: ['#8b5cf6', '#22d3ee', '#10b981'] });
+        setShowSuccessModal(true);
       } else {
          setActiveTemplate(null);
-         fetchData(); 
+         fetchData();
       }
-      
-    } catch (error) { 
-      console.error("Error de red guardando sesión:", error); 
+
+    } catch (error) {
+      posthog.captureException(error);
+      console.error("Error de red guardando sesión:", error);
     } finally { 
       setIsSavingWorkout(false); 
     }

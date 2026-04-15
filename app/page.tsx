@@ -6,6 +6,7 @@ import Hero from './Hero';
 import AuthForm from '../components/auth/AuthForm';
 import confetti from 'canvas-confetti';
 import { signIn, signOut, useSession } from "next-auth/react";
+import posthog from 'posthog-js';
 import HeatMap from '../components/dashboard/HeatMap';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import { 
@@ -136,8 +137,14 @@ export default function Home() {
   useEffect(() => {
     if (status === "authenticated") {
       setShowApp(true);
+      if (userId) {
+        posthog.identify(userId, {
+          name: session?.user?.name ?? undefined,
+          email: session?.user?.email ?? undefined,
+        });
+      }
     }
-  }, [status]);
+  }, [status, userId]);
 
   const fetchData = async () => {
     try {
@@ -249,7 +256,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#050505] text-slate-200 p-4 md:p-10 font-sans">
       <div className="max-w-6xl mx-auto space-y-10">
-        <DashboardHeader userName={session?.user?.name} onSignOut={() => signOut()} />
+        <DashboardHeader userName={session?.user?.name} onSignOut={() => { posthog.reset(); signOut(); }} />
         <div className="grid lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-8">
           

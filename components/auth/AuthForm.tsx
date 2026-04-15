@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { ShieldCheck } from 'lucide-react';
+import posthog from 'posthog-js';
 
 export default function AuthForm() {
   const [errorMsg, setErrorMsg] = useState('');
@@ -11,9 +12,12 @@ export default function AuthForm() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setErrorMsg('');
+    posthog.capture('sign_in_started', { provider: 'google' });
     try {
       await signIn('google', { callbackUrl: '/' });
     } catch (error) {
+      posthog.capture('sign_in_error', { provider: 'google' });
+      posthog.captureException(error);
       setErrorMsg('Error al conectar con Google. Inténtalo de nuevo.');
     } finally {
       setIsLoading(false);

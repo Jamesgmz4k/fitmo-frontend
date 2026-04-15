@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Trophy, Target, Ruler, User as UserIcon, ArrowRight } from 'lucide-react';
+import posthog from 'posthog-js';
 
 export default function OnboardingPage() {
   const { data: session } = useSession();
@@ -48,9 +49,14 @@ export default function OnboardingPage() {
       });
 
       if (resProfile.ok) {
+        posthog.capture('onboarding_completed', {
+          gym_goal: goal,
+          experience_level: experience,
+        });
         window.location.href = '/'; // Regresamos al Dashboard ya con datos
       }
     } catch (error) {
+      posthog.captureException(error);
       console.error("Error en onboarding:", error);
     }
   };

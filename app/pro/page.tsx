@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
 import HeatMap from "../../components/dashboard/HeatMap";
 import { apiClient } from '../../lib/apiClient';
+import posthog from 'posthog-js';
 
 export default function ProPage() {
   const { data: session } = useSession();
@@ -27,6 +28,10 @@ export default function ProPage() {
     };
   }, []);
 
+  useEffect(() => {
+    posthog.capture('pro_page_viewed');
+  }, []);
+
   const handleSubscribe = async (planType: string) => {
     const userId = (session?.user as any)?.id;
     if (!userId) {
@@ -34,7 +39,8 @@ export default function ProPage() {
       return;
     }
 
-    setLoading(planType); 
+    setLoading(planType);
+    posthog.capture('subscription_checkout_started', { plan_type: planType });
 
     try {
       const res = await apiClient('/api/create-checkout-session/', {
@@ -52,6 +58,7 @@ export default function ProPage() {
         setLoading(null);
       }
     } catch (error) {
+      posthog.captureException(error);
       console.error("Error en la petición:", error);
       alert("Error de conexión. Asegúrate de que Django esté corriendo.");
       setLoading(null);
