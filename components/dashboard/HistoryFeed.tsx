@@ -6,7 +6,7 @@ import { useState } from 'react';
 interface HistoryFeedProps {
   workouts: any[];
   isPro?: boolean; 
-  onEdit: (workout: any) => void;
+  onEdit?: (workout: any) => void;
   onDelete: (id: number) => void;
   getStatus: (exerciseName: string) => { label: string, color: string, bg: string, icon: React.ReactNode };
 }
@@ -216,9 +216,16 @@ interface HistoryFeedProps {
                           <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mt-0.5">{w.muscle}</p>
                         </div>
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => onEdit(w)} className="p-1.5 bg-white/5 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors"><Edit3 size={12} /></button>
-                          <button onClick={() => onDelete(w.id)} className="p-1.5 bg-white/5 text-slate-400 hover:text-red-400 rounded-lg transition-colors"><Trash2 size={12} /></button>
-                        </div>
+                {onEdit && (
+                  <button onClick={() => onEdit?.(w)} className="p-1.5 bg-white/5 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors">
+                    <Edit3 size={12} />
+                  </button>
+                )}
+                <button onClick={() => onDelete(w.id)} className="p-1.5 bg-white/5 text-slate-400 hover:text-red-400 rounded-lg transition-colors">
+                  <Trash2 size={12} />
+                </button>
+</div>
+                      
                       </div>
                       
                       <div className="flex flex-wrap gap-1.5">
