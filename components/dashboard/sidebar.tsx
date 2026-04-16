@@ -23,11 +23,12 @@ export default function Sidebar({ isPro, userName = "Atleta" }: { isPro?: boolea
   // 2. AGREGAMOS NUTRICIÓN A LA LISTA
   const menuItems = [
     { icon: <LayoutDashboard size={20} />, label: "Dashboard", href: "/" },
-    { icon: <User size={20} />, label: "Mi Perfil", href: "/perfil" },
-    { icon: <Activity size={20} />, label: "Datos de Atleta", href: "/datos" },
+    { icon: <Dumbbell size={20} />, label: "Entrenar", href: "/entrenar" },
     { icon: <Utensils size={20} />, label: "Nutrición", href: "/nutricion" },
     { icon: <Moon size={20} />, label: "Sueño", href: "/sueno" }, // <--- Pega esta línea aquí // <-- NUEVO BOTÓN
-    { icon: <Dumbbell size={20} />, label: "Entrenar", href: "/entrenar" }, // <--- AGREGAR ESTA LÍNEA (Asegúrate de importar Dumbbell de lucide-react)
+    { icon: <Activity size={20} />, label: "Datos de Atleta", href: "/datos" },
+    { icon: <User size={20} />, label: "Mi Perfil", href: "/perfil" },
+
   ];
 
   return (
