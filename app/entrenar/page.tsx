@@ -5,7 +5,8 @@ import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import { apiClient } from '../../lib/apiClient'; 
 import { useSession, signOut } from 'next-auth/react';
-import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy, Info } from 'lucide-react';
+import { Activity, BrainCircuit, Plus, Dumbbell, Play, X, Edit3, Trash2, CheckCircle2, ChevronLeft, Check, Timer, Trophy, Info, ArrowRight, Utensils } from 'lucide-react';
+import Link from 'next/link';
 import confetti from 'canvas-confetti';
 import posthog from 'posthog-js';
 
@@ -676,26 +677,98 @@ export default function EntrenarPage() {
             </div>
           )}
 
-          {!isBuilding && templates.map(template => (
-             <div key={template.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl mb-6 relative group">
-                <div className="absolute top-6 right-6 flex gap-2">
-                  <button onClick={() => handleEditInit(template)} className="p-2 text-slate-400 hover:text-cyan-400 bg-white/5 rounded-xl transition-colors"><Edit3 size={14} /></button>
-                  <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 text-slate-400 hover:text-red-400 bg-white/5 rounded-xl transition-colors"><Trash2 size={14} /></button>
+          {/* ---------------- EMBUDO DE RETENCIÓN ---------------- */}
+          {!isBuilding && templates.length === 0 && (
+            <div className="bg-[#050505] border border-white/10 rounded-3xl p-6 md:p-8 max-w-2xl mx-auto mt-8 relative overflow-hidden">
+              <div className="absolute -top-20 -right-20 w-64 h-64 bg-cyan-500/10 blur-[80px] rounded-full pointer-events-none" />
+              
+              <div className="w-14 h-14 bg-gradient-to-br from-violet-600/20 to-cyan-500/20 rounded-2xl flex items-center justify-center mb-6 border border-white/5">
+                 <Info className="text-cyan-400" size={28} />
+              </div>
+              
+              <h2 className="text-2xl font-black italic uppercase text-white tracking-tight mb-3">
+                Bienvenido a Fitmo!
+              </h2>
+              <p className="text-slate-400 mb-8 text-sm md:text-base leading-relaxed">
+               Crea tu primer template agregando tus ejercicios y nosotros nos encargamos de medir tu progreso. Aquí es donde ocurre la magia de la sobrecarga progresiva.
+              </p>
+
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-8">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-5 flex items-center gap-2">
+                  <Timer size={18} className="text-violet-400"/>
+                  Guía de Descansos (Timer)
+                </h3>
+                <ul className="space-y-4 text-sm text-slate-300">
+                  <li className="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span>Hipertrofia <span className="text-slate-500">(Aislados)</span></span>
+                    <span className="font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">90 s</span>
+                  </li>
+                  <li className="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span>Hipertrofia <span className="text-slate-500">(Compuestos)</span></span>
+                    <span className="font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">120 - 180 s</span>
+                  </li>
+                  <li className="flex justify-between items-center">
+                    <span>Fuerza Pura</span>
+                    <span className="font-bold text-violet-400 bg-violet-500/10 px-2 py-1 rounded-md">3 - 5+ min</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button 
+                onClick={() => setIsBuilding(true)}
+                className="w-full bg-gradient-to-r from-violet-600 to-cyan-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-transform hover:scale-[1.02] shadow-lg shadow-violet-500/20"
+              >
+                Crear mi primer Template
+                <ArrowRight size={20} />
+              </button>
+            </div>
+          )}
+
+          {!isBuilding && templates.length > 0 && (
+            <div className="mb-8">
+              <div className="bg-gradient-to-r from-violet-900/30 to-cyan-900/30 border border-violet-500/20 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+                <div>
+                  <h3 className="text-white font-bold text-sm md:text-base mb-1 flex items-center gap-2">
+                    <Utensils size={18} className="text-cyan-400" />
+                    El entrenamiento es solo el 50%
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Ya tienes tu laboratorio listo. Ahora construye tu ingesta calórica para asegurar los gains.
+                  </p>
                 </div>
-                <h4 className="text-xl font-black text-white italic mb-4">{template.name}</h4>
-                <div className="space-y-2 mb-6">
-                  {template.exercises.map((ex: any) => (
-                    <div key={ex.id} className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-bold">{ex.exercise_name}</span>
-                      <span className="text-slate-600 font-black">{ex.target_sets}x{ex.target_reps} • <span className="text-cyan-500">{ex.rest_time}s</span></span>
+                
+                <Link 
+                  href="/nutricion" 
+                  className="w-full md:w-auto bg-white/10 hover:bg-white/20 text-white px-5 py-3 rounded-xl text-sm font-bold border border-white/10 transition-colors whitespace-nowrap text-center"
+                >
+                  Configurar Nutrición
+                </Link>
+              </div>
+
+              {/* Mapeo normal de templates */}
+              {templates.map(template => (
+                 <div key={template.id} className="bg-white/[0.02] border border-white/5 p-6 rounded-3xl mb-6 relative group">
+                    <div className="absolute top-6 right-6 flex gap-2">
+                      <button onClick={() => handleEditInit(template)} className="p-2 text-slate-400 hover:text-cyan-400 bg-white/5 rounded-xl transition-colors"><Edit3 size={14} /></button>
+                      <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 text-slate-400 hover:text-red-400 bg-white/5 rounded-xl transition-colors"><Trash2 size={14} /></button>
                     </div>
-                  ))}
-                </div>
-                <button onClick={() => startWorkout(template)} className="w-full bg-[#0a0a0a] border border-white/5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2 hover:bg-white/5">
-                  <Play size={14} fill="currentColor" /> Iniciar Sesión
-                </button>
-             </div>
-          ))}
+                    <h4 className="text-xl font-black text-white italic mb-4">{template.name}</h4>
+                    <div className="space-y-2 mb-6">
+                      {template.exercises.map((ex: any) => (
+                        <div key={ex.id} className="flex justify-between items-center text-xs">
+                          <span className="text-slate-400 font-bold">{ex.exercise_name}</span>
+                          <span className="text-slate-600 font-black">{ex.target_sets}x{ex.target_reps} • <span className="text-cyan-500">{ex.rest_time}s</span></span>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => startWorkout(template)} className="w-full bg-[#0a0a0a] border border-white/5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2 hover:bg-white/5">
+                      <Play size={14} fill="currentColor" /> Iniciar Sesión
+                    </button>
+                 </div>
+              ))}
+            </div>
+          )}
+          {/* ------------------------------------------------------------- */}
 
         </div>
       </div>
