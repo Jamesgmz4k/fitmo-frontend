@@ -55,9 +55,10 @@ export default function Sidebar({ isPro, userName = "Atleta" }: { isPro?: boolea
       {/* 📱 LA BARRA LATERAL (Deslizable en móvil, estática en desktop) */}
       <aside 
         className={`h-screen fixed top-0 left-0 bg-[#050505] border-r border-white/5 z-50 transition-all duration-300 ease-in-out flex flex-col transform md:translate-x-0 ${
-          expanded ? 'w-64' : 'w-20'
+          expanded || mobileOpen ? 'w-64' : 'w-20' /* 👈 EL ARREGLO ESTÁ AQUÍ */
         } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
+      
         {/* HEADER / LOGO */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-white/5 shrink-0">
           <div className={`flex items-center gap-3 overflow-hidden transition-all ${expanded || mobileOpen ? 'w-auto opacity-100' : 'w-0 opacity-0 md:opacity-100 md:w-auto'}`}>
