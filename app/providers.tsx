@@ -4,11 +4,11 @@ import { SessionProvider } from "next-auth/react";
 import posthog from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
 
-// 🚀 EL ARREGLO: Inicializamos PostHog en el entorno global (fuera de React)
-// Así garantizamos que arranque antes de que cualquier botón o página intente llamarlo.
+// 🚀 INICIALIZACIÓN BLINDADA: Llave directa y túnel anti-adblockers activado
 if (typeof window !== 'undefined') {
-  posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
+  posthog.init('phc_uTEfxW72zA6RzRPcRfx938xyCCpeCEwod8MBwi9h5ZKp', {
+    api_host: '/ingest', // Esto conecta directamente con tu next.config.ts
+    ui_host: 'https://us.posthog.com',
     person_profiles: 'identified_only',
     capture_pageview: false 
   });
