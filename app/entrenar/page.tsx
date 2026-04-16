@@ -48,8 +48,7 @@ export default function EntrenarPage() {
   const [isSavingWorkout, setIsSavingWorkout] = useState(false);
   const [unit, setUnit] = useState<'kg' | 'lbs'>('kg'); 
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
-  
-  const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number } | null>(null);
+  const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number, endTime: number } | null>(null);
 
   // EFECTO DE LECTURA DE TUTORIAL EN LA URL (Método seguro para Vercel)
   useEffect(() => {
@@ -64,16 +63,21 @@ export default function EntrenarPage() {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (activeTimer && activeTimer.timeLeft > 0) {
-      interval = setInterval(() => {
-        setActiveTimer(prev => prev ? { ...prev, timeLeft: prev.timeLeft - 1 } : null);
-      }, 1000);
-    } else if (activeTimer && activeTimer.timeLeft === 0) {
-      setActiveTimer(null);
-    }
-    return () => clearInterval(interval);
-  }, [activeTimer]);
+  let interval: NodeJS.Timeout;
+  if (activeTimer && activeTimer.timeLeft > 0) {
+    interval = setInterval(() => {
+      setActiveTimer(prev => {
+        if (!prev) return null;
+        // La magia: Calculamos el tiempo real restante basándonos en el reloj del sistema
+        const newTimeLeft = Math.max(0, Math.ceil((prev.endTime - Date.now()) / 1000));
+        return { ...prev, timeLeft: newTimeLeft };
+      });
+    }, 1000);
+  } else if (activeTimer && activeTimer.timeLeft === 0) {
+    setActiveTimer(null);
+  }
+  return () => clearInterval(interval);
+}, [activeTimer]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -248,12 +252,16 @@ export default function EntrenarPage() {
     setWorkoutData(newData);
 
     if (isNowCompleted) {
-      setActiveTimer({ exerciseIdx: exIdx, setIdx: setIdx, timeLeft: restTime, totalTime: restTime });
-    } else {
-      if (activeTimer?.exerciseIdx === exIdx && activeTimer?.setIdx === setIdx) {
-        setActiveTimer(null);
-      }
-    }
+  // Calculamos la hora exacta en la que se acaba el descanso (ahora + segundos de descanso)
+  const exactEndTime = Date.now() + (restTime * 1000);
+  setActiveTimer({ exerciseIdx: exIdx, setIdx: setIdx, timeLeft: restTime, totalTime: restTime, endTime: exactEndTime });
+} else {
+  if (activeTimer?.exerciseIdx === exIdx && activeTimer?.setIdx === setIdx) {
+    setActiveTimer(null);
+  }
+}
+
+ 
   };
 
  const finishWorkout = async () => {
