@@ -53,7 +53,7 @@ export default function OnboardingPage() {
           gym_goal: goal,
           experience_level: experience,
         });
-        window.location.href = '/'; // Regresamos al Dashboard ya con datos
+        window.location.href = '/entrenar'; // Regresamos al Dashboard ya con datos
       }
     } catch (error) {
       posthog.captureException(error);
