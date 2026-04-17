@@ -120,7 +120,7 @@ export default function NutricionPage() {
             </div>
             <div>
               <h1 className="text-3xl font-black italic uppercase text-white tracking-tighter">
-                Motor <span className="text-emerald-500">Nutricional</span>
+                Calculadora <span className="text-emerald-500">Nutricional</span>
               </h1>
             </div>
           </div>

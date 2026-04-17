@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DashboardLayout from '../../components/dashboard/DashboardLayout';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import { apiClient } from '../../lib/apiClient'; 
@@ -43,6 +43,7 @@ export default function EntrenarPage() {
   const [templateName, setTemplateName] = useState('');
   const [builderExercises, setBuilderExercises] = useState([{ id: Date.now(), category: '', name: '', sets: 3, reps: '10', rest_time: 90 }]);
   const [isPro, setIsPro] = useState(false);
+  const [hasNutritionPlan, setHasNutritionPlan] = useState(false);
 
   const [activeTemplate, setActiveTemplate] = useState<any>(null);
   const [workoutData, setWorkoutData] = useState<Record<number, {weights: string[], reps: string[], completed: boolean[], previous: any}>>({});
@@ -50,6 +51,69 @@ export default function EntrenarPage() {
   const [unit, setUnit] = useState<'kg' | 'lbs'>('kg'); 
   const [showSuccessModal, setShowSuccessModal] = useState(false); 
   const [activeTimer, setActiveTimer] = useState<{ exerciseIdx: number, setIdx: number, timeLeft: number, totalTime: number, endTime: number } | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [showLiveAdd, setShowLiveAdd] = useState(false);
+  const [liveAddCat, setLiveAddCat] = useState('');
+  const [liveAddName, setLiveAddName] = useState('');
+
+  // 🚀 MAGIA 6: Lógica para Eliminar y Agregar sobre la marcha
+  const addLiveExercise = () => {
+    if (!liveAddCat || !liveAddName) return;
+
+    // 1. Creamos el ejercicio temporal
+    const newEx = {
+      id: Date.now(), 
+      category: liveAddCat,
+      exercise_name: liveAddName,
+      target_sets: 3,
+      target_reps: '10',
+      rest_time: 90
+    };
+
+    // 2. Lo empujamos a la copia del template activo
+    const updatedTemplate = { ...activeTemplate };
+    updatedTemplate.exercises.push(newEx);
+    setActiveTemplate(updatedTemplate);
+
+    // 3. Le creamos su espacio en la data del workout (para que tenga inputs)
+    const newIdx = updatedTemplate.exercises.length - 1;
+    const prevData = getLastPerformance(liveAddName);
+
+    const newData = { ...workoutData };
+    newData[newIdx] = {
+      weights: ['', '', ''],
+      reps: ['10', '10', '10'],
+      completed: [false, false, false],
+      previous: prevData
+    };
+    setWorkoutData(newData);
+
+    // 4. Limpiamos la UI
+    setShowLiveAdd(false);
+    setLiveAddCat('');
+    setLiveAddName('');
+  };
+
+  const removeLiveExercise = (idxToRemove: number) => {
+    if(!confirm("¿Quitar este ejercicio de la sesión actual?")) return;
+
+    const updatedTemplate = { ...activeTemplate };
+    updatedTemplate.exercises.splice(idxToRemove, 1);
+    setActiveTemplate(updatedTemplate);
+
+    // Reacomodamos los índices de los inputs para que no se desfase la data
+    const newData: Record<number, any> = {};
+    updatedTemplate.exercises.forEach((ex: any, i: number) => {
+      if (i < idxToRemove) {
+        newData[i] = workoutData[i];
+      } else {
+        newData[i] = workoutData[i + 1];
+      }
+    });
+    setWorkoutData(newData);
+  };
+
+
 
   // EFECTO DE LECTURA DE TUTORIAL EN LA URL (Método seguro para Vercel)
   useEffect(() => {
@@ -64,21 +128,32 @@ export default function EntrenarPage() {
   }, []);
 
   useEffect(() => {
-  let interval: NodeJS.Timeout;
-  if (activeTimer && activeTimer.timeLeft > 0) {
-    interval = setInterval(() => {
-      setActiveTimer(prev => {
-        if (!prev) return null;
-        // La magia: Calculamos el tiempo real restante basándonos en el reloj del sistema
-        const newTimeLeft = Math.max(0, Math.ceil((prev.endTime - Date.now()) / 1000));
-        return { ...prev, timeLeft: newTimeLeft };
-      });
-    }, 1000);
-  } else if (activeTimer && activeTimer.timeLeft === 0) {
-    setActiveTimer(null);
-  }
-  return () => clearInterval(interval);
-}, [activeTimer]);
+    let interval: NodeJS.Timeout;
+    if (activeTimer && activeTimer.timeLeft > 0) {
+      interval = setInterval(() => {
+        setActiveTimer(prev => {
+          if (!prev) return null;
+          const newTimeLeft = Math.max(0, Math.ceil((prev.endTime - Date.now()) / 1000));
+          return { ...prev, timeLeft: newTimeLeft };
+        });
+      }, 1000);
+    } else if (activeTimer && activeTimer.timeLeft === 0) {
+      
+      // 🚀 ¡TIEMPO AGOTADO! Disparar alarmas
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0; // Aseguramos que inicie desde el principio
+        audioRef.current.play().catch(e => console.error("Error reproduciendo campana:", e));
+      }
+
+      // Intentamos disparar la vibración (Patrón: vibra 500ms, pausa 200ms, vibra 500ms)
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([500, 200, 500]);
+      }
+
+      setActiveTimer(null);
+    }
+    return () => clearInterval(interval);
+  }, [activeTimer]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -102,6 +177,20 @@ export default function EntrenarPage() {
       if (resProfile.ok) {
         const profileData = await resProfile.json();
         setIsPro(profileData.is_pro);
+        // 🚀 NUEVO: Verificamos si el usuario ya tiene su plan de nutrición
+      try {
+        // NOTA: Ajusta la ruta '/api/nutricion/' según cómo se llame tu endpoint en Django
+        const resNutrition = await apiClient(`/api/nutrition/?user_id=${userId}`);
+        if (resNutrition.ok) {
+          const nutData = await resNutrition.json();
+          // Si el backend devuelve un array con datos o un objeto válido, ocultamos la tarjeta
+          if (nutData && (nutData.length > 0 || nutData.id)) {
+            setHasNutritionPlan(true);
+          }
+        }
+      } catch (error) {
+        console.error("No se pudo verificar la nutrición:", error);
+      }
       }
 
       const resEx = await apiClient(`/api/exercises/`);
@@ -253,14 +342,24 @@ export default function EntrenarPage() {
     setWorkoutData(newData);
 
     if (isNowCompleted) {
-  // Calculamos la hora exacta en la que se acaba el descanso (ahora + segundos de descanso)
-  const exactEndTime = Date.now() + (restTime * 1000);
-  setActiveTimer({ exerciseIdx: exIdx, setIdx: setIdx, timeLeft: restTime, totalTime: restTime, endTime: exactEndTime });
-} else {
-  if (activeTimer?.exerciseIdx === exIdx && activeTimer?.setIdx === setIdx) {
-    setActiveTimer(null);
+    const exactEndTime = Date.now() + (restTime * 1000);
+    setActiveTimer({ exerciseIdx: exIdx, setIdx: setIdx, timeLeft: restTime, totalTime: restTime, endTime: exactEndTime });
+
+    // 🚀 EL HACK DE IOS: Desbloqueamos el audio en el evento de clic del usuario
+    if (audioRef.current) {
+      audioRef.current.muted = true; // Lo silenciamos para que no suene de golpe
+      audioRef.current.play().then(() => {
+        audioRef.current!.pause();      // Lo pausamos inmediatamente
+        audioRef.current!.currentTime = 0; // Lo regresamos al segundo cero
+        audioRef.current!.muted = false; // Le quitamos el mute para cuando sea hora de sonar
+      }).catch(e => console.log("Audio unlock prevenido:", e));
+    }
+
+  } else {
+    if (activeTimer?.exerciseIdx === exIdx && activeTimer?.setIdx === setIdx) {
+      setActiveTimer(null);
+    }
   }
-}
 
  
   };
@@ -340,7 +439,7 @@ export default function EntrenarPage() {
   if (activeTemplate) {
     return (
       <DashboardLayout userName={session?.user?.name}>
-        
+        <audio ref={audioRef} src="/bell.mp3" preload="auto" />
         {showSuccessModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050505]/90 backdrop-blur-sm p-4">
             <div className="bg-[#0a0a0a] border border-cyan-500/30 p-10 rounded-[3rem] text-center max-w-sm shadow-[0_0_80px_rgba(34,211,238,0.2)] animate-in zoom-in-95">
@@ -389,9 +488,17 @@ export default function EntrenarPage() {
             <div className="space-y-6">
               {activeTemplate.exercises.map((ex: any, idx: number) => (
                 <div key={ex.id} className="bg-[#050505] border border-white/5 p-4 md:p-6 rounded-[2rem] shadow-lg">
-                  <div className="mb-4">
-                      <h3 className="text-lg font-black italic text-cyan-400 uppercase">{ex.exercise_name}</h3>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{ex.category}</p>
+                  <div className="mb-4 flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-black italic text-cyan-400 uppercase">{ex.exercise_name}</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{ex.category}</p>
+                      </div>
+                      <button 
+                        onClick={() => removeLiveExercise(idx)} 
+                        className="text-slate-600 hover:text-red-500 bg-white/5 p-2 rounded-xl transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 px-2">
@@ -426,11 +533,20 @@ export default function EntrenarPage() {
                               type="number" 
                               placeholder="0"
                               value={workoutData[idx].weights[setIdx]}
-                              onChange={(e) => {
-                                const newData = {...workoutData};
-                                newData[idx].weights[setIdx] = e.target.value;
-                                setWorkoutData(newData);
-                              }}
+                             onChange={(e) => {
+                                  const val = e.target.value;
+                                  const newData = {...workoutData};
+                                  newData[idx].weights[setIdx] = val;
+
+                                  // 🚀 MAGIA 5: Autocompletado en cascada
+                                  // Si cambias un peso, replicamos el valor hacia abajo en los sets que faltan
+                                  for (let i = setIdx + 1; i < newData[idx].weights.length; i++) {
+                                    if (!newData[idx].completed[i]) {
+                                      newData[idx].weights[i] = val;
+                                    }
+                                  }
+                                  setWorkoutData(newData);
+                                }}
                               className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
                               disabled={isCompleted} 
                             />
@@ -487,18 +603,107 @@ export default function EntrenarPage() {
 
                 </div>
               ))}
+      </div>
             </div>
 
+            {/* 🚀 MAGIA 6: UI para agregar ejercicio extra a la sesión activa */}
+            {!showLiveAdd ? (
+              <button
+                onClick={() => setShowLiveAdd(true)}
+                className="w-full py-4 border border-dashed border-white/10 rounded-[2rem] text-[10px] font-black text-slate-500 hover:text-cyan-400 uppercase tracking-widest transition-colors flex items-center justify-center gap-2 mb-6"
+              >
+                <Plus size={16} /> Agregar Ejercicio Extra
+              </button>
+            ) : (
+              <div className="bg-[#0a0a0a] border border-cyan-500/20 p-5 rounded-[2rem] shadow-lg mb-6 animate-in slide-in-from-top-4">
+                <h4 className="text-xs font-black text-cyan-400 uppercase tracking-widest mb-4">Añadir Ejercicio a la rutina</h4>
+                <div className="flex flex-col md:flex-row gap-3 mb-4">
+                  <select
+                    className="w-full md:w-1/2 bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none"
+                    value={liveAddCat}
+                    onChange={(e) => { setLiveAddCat(e.target.value); setLiveAddName(''); }}
+                  >
+                    <option value="">Músculo</option>
+                    {Object.keys(catalog).map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select
+                    className="w-full md:w-1/2 bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none disabled:opacity-50"
+                    value={liveAddName}
+                    onChange={(e) => setLiveAddName(e.target.value)}
+                    disabled={!liveAddCat}
+                  >
+                    <option value="">Ejercicio</option>
+                    {liveAddCat && Array.from(new Set(catalog[liveAddCat] || [])).map((n, i) => <option key={`${n}-${i}`} value={n}>{n}</option>)}
+                  </select>
+                </div>
+
+                {/* 🚀 NUEVO: Crear ejercicio sobre la marcha */}
+                <div className="pt-4 border-t border-white/5 mb-4">
+                  {!showAddEx ? (
+                    <button
+                      onClick={() => setShowAddEx(true)}
+                      className="w-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-4 py-3 rounded-xl border border-cyan-500/20"
+                    >
+                      <Plus size={14} /> ¿No está en la lista? Crear Ejercicio Nuevo
+                    </button>
+                  ) : (
+                    <div className="bg-cyan-500/5 border border-cyan-500/20 p-4 rounded-2xl flex flex-col md:flex-row gap-3 items-center animate-in fade-in zoom-in duration-200">
+                      <select
+                        className="w-full md:w-1/3 bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-slate-300 font-bold outline-none"
+                        value={newExCat}
+                        onChange={e => setNewExCat(e.target.value)}
+                      >
+                        <option value="">Músculo</option>
+                        {Object.keys(catalog).map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Nombre (Ej. Muscle Up)"
+                        className="w-full md:w-1/3 bg-[#050505] p-3 rounded-xl border border-white/10 text-xs text-white font-bold outline-none"
+                        value={newExName}
+                        onChange={e => setNewExName(e.target.value)}
+                      />
+                      <div className="flex gap-2 w-full md:w-auto flex-1">
+                        <button
+                          onClick={async () => {
+                            const cat = newExCat;
+                            const name = newExName;
+                            await handleAddNewExercise(); // Guarda en BD
+                            setLiveAddCat(cat); // Lo auto-selecciona
+                            setLiveAddName(name); // Lo auto-selecciona
+                          }}
+                          disabled={isSavingEx || !newExCat || !newExName}
+                          className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl disabled:opacity-50 transition-colors"
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          onClick={() => setShowAddEx(false)}
+                          className="px-4 bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-widest py-3 rounded-xl transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <button onClick={addLiveExercise} disabled={!liveAddCat || !liveAddName} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl disabled:opacity-50 transition-colors">Agregar a la Sesión</button>
+                  <button onClick={() => setShowLiveAdd(false)} className="px-4 bg-white/5 hover:bg-white/10 text-slate-400 font-black text-[10px] uppercase tracking-widest py-3 rounded-xl transition-colors">Cancelar</button>
+                </div>
+              </div>
+            )}
+            
             <button 
               onClick={finishWorkout}
               disabled={isSavingWorkout}
               className="w-full bg-cyan-600 hover:bg-cyan-500 text-white p-6 rounded-[2rem] font-black text-sm uppercase tracking-widest transition-all shadow-[0_0_40px_rgba(34,211,238,0.2)] flex justify-center items-center gap-3 disabled:opacity-50"
             >
-              {isSavingWorkout ? 'Procesando...' : <><CheckCircle2 size={24} /> Finalizar Sesión</>}
+              {isSavingWorkout ? 'Procesando...' : <span><CheckCircle2 size={24} /> Finalizar Sesión</span>}
             </button>
 
           </div>
-        </div>
       </DashboardLayout>
     );
   }
@@ -558,7 +763,7 @@ export default function EntrenarPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between bg-white/[0.02] p-6 rounded-3xl border border-white/5 shadow-xl gap-4">
             <div>
               <h1 className="text-2xl font-black italic uppercase text-white tracking-tighter flex items-center gap-2">
-                Entrenamiento <span className="text-cyan-500">En Vivo</span> <Activity className="text-cyan-400" size={24} />
+                Sesión <span className="text-cyan-500">de Entrenamiento</span> <Activity className="text-cyan-400" size={24} />
               </h1>
             </div>
             <button 
@@ -578,13 +783,13 @@ export default function EntrenarPage() {
               className="bg-white/5 text-cyan-400 px-6 py-3 rounded-2xl font-black text-[10px] tracking-widest uppercase transition-all border border-cyan-500/20 flex items-center justify-center gap-2 hover:bg-white/10"
             >
               {isBuilding ? <X size={16} /> : <Plus size={16} />} 
-              {isBuilding ? 'Cancelar' : 'Crear Template'}
+              {isBuilding ? 'Cancelar' : 'Crear Rutina'}
             </button>
           </div>
 
           {isBuilding && (
             <div className="bg-[#0a0a0a] border border-cyan-500/30 p-6 md:p-8 rounded-[2.5rem] shadow-[0_0_40px_rgba(34,211,238,0.05)] animate-in slide-in-from-top-4">
-              <input type="text" placeholder="Nombre de la Rutina (Ej. Día de Empuje)" value={templateName} onChange={(e) => setTemplateName(e.target.value)} className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 text-lg outline-none text-white font-black mb-6" />
+              <input type="text" placeholder="Nombre de la Rutina (Ej. Día de Pecho y Triceps)" value={templateName} onChange={(e) => setTemplateName(e.target.value)} className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 text-lg outline-none text-white font-black mb-6" />
 
               <div className="space-y-4 mb-6">
                 {builderExercises.map((ex, idx) => (
@@ -726,6 +931,7 @@ export default function EntrenarPage() {
 
           {!isBuilding && templates.length > 0 && (
             <div className="mb-8">
+              {!hasNutritionPlan && (
               <div className="bg-gradient-to-r from-violet-900/30 to-cyan-900/30 border border-violet-500/20 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
                 <div>
                   <h3 className="text-white font-bold text-sm md:text-base mb-1 flex items-center gap-2">
@@ -744,6 +950,7 @@ export default function EntrenarPage() {
                   Configurar Nutrición
                 </Link>
               </div>
+              )}
 
               {/* Mapeo normal de templates */}
               {templates.map(template => (
