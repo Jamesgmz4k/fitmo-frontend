@@ -4,7 +4,7 @@ import { Flame, Activity, CheckCircle, Lock, Zap } from 'lucide-react';
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // Importamos Link para que funcione igual
+import Link from 'next/link'; 
 import { apiClient } from '../../lib/apiClient';
 
 interface HeatMapItem {
@@ -66,7 +66,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
         </div>
       </div>
 
-      <div className="space-y-6 overflow-y-auto max-h-[220px] pr-2 custom-scrollbar">
+      <div className="space-y-6 overflow-y-auto max-h-55 pr-2 custom-scrollbar">
         {heatMapData.map((item, index) => (
           <div key={index} className="group">
             <div className="flex justify-between items-end mb-2">
@@ -97,12 +97,9 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
     return <div className="text-slate-400 text-center py-10 text-xs uppercase tracking-widest font-bold">Analizando fibras musculares...</div>;
   }
 
-  // ==========================================
-  // CLON EXACTO DEL DISEÑO DE ANALÍTICA PRO
-  // ==========================================
   if (!isPro) {
     return (
-      <section className="relative bg-white/[0.02] rounded-[2.5rem] border border-white/5 shadow-xl overflow-hidden h-[380px] flex flex-col items-center justify-center p-6 w-full">
+      <section className="relative bg-white/2 rounded-[2.5rem] border border-white/5 shadow-xl overflow-hidden h-95 flex flex-col items-center justify-center p-6 w-full">
         {/* El contenido real borroso de fondo */}
         <div className="absolute inset-0 blur-md opacity-20 pointer-events-none select-none scale-95">
           <HeatMapContent />
@@ -110,19 +107,19 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
 
         {/* La caja de bloqueo con los mismos estilos de tu código */}
         <div className="relative z-10 flex flex-col items-center text-center p-8 bg-[#050505]/90 rounded-[2.5rem] border border-violet-500/20 backdrop-blur-xl w-full h-full justify-center shadow-2xl">
-          <div className="w-16 h-16 bg-gradient-to-br from-violet-600/20 to-cyan-600/20 rounded-2xl flex items-center justify-center mb-6 border border-white/10 shrink-0">
+          <div className="w-16 h-16 bg-linear-to-br from-violet-600/20 to-cyan-600/20 rounded-2xl flex items-center justify-center mb-6 border border-white/10 shrink-0">
             <Lock size={28} className="text-violet-400" />
           </div>
 
           <h3 className="text-lg font-black text-white italic mb-3 tracking-tighter uppercase text-center shrink-0">Mapa de Calor Pro</h3>
 
-          <p className="text-[11px] text-slate-400 mb-8 leading-relaxed font-medium shrink-0 max-w-[280px]">
+          <p className="text-[11px] text-slate-400 mb-8 leading-relaxed font-medium shrink-0 max-w-70">
             Visualiza el estado de recuperación exacto de cada fibra muscular y evita el sobreentrenamiento.
           </p>
 
           <Link
             href="/pro"
-            className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 p-4 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(139,92,246,0.3)] shrink-0"
+            className="w-full bg-linear-to-r from-violet-600 to-cyan-600 p-4 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(139,92,246,0.3)] shrink-0"
           >
             <Zap size={14} fill="currentColor" /> Convertirme en Pro
           </Link>
@@ -134,7 +131,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
   // Caso: Es Pro pero no tiene datos
   if (heatMapData.length === 0) {
     return (
-      <section className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] h-[380px] flex items-center justify-center p-8 text-center">
+      <section className="bg-[#0a0a0a] border border-white/5 rounded-[2.5rem] h-95 flex items-center justify-center p-8 text-center">
         <p className="text-slate-500 text-xs font-medium">Registra un entrenamiento en el formulario para generar tu mapa de calor.</p>
       </section>
     );
@@ -142,7 +139,7 @@ export default function HeatMap({ isPro }: { isPro?: boolean }) {
 
   // Caso: Es Pro y tiene datos
   return (
-    <section className="h-[380px] w-full">
+    <section className="h-95 w-full">
       <HeatMapContent />
     </section>
   );

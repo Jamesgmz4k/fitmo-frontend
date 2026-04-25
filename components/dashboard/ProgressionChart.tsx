@@ -29,14 +29,13 @@ export default function ProgressionChart({
   progressPercent 
 }: ProgressionChartProps) {
 
-  // SEGURIDAD DE ARQUITECTURA: El componente muere aquí si no es Pro.
  // SEGURIDAD DE ARQUITECTURA: El componente muere aquí si no es Pro.
   if (!isPro) {
     return (
-      <section className="relative bg-white/[0.02] rounded-[2.5rem] border border-white/5 shadow-xl overflow-hidden h-[380px] flex flex-col items-center justify-center p-6">
+      <section className="relative bg-white/2 rounded-[2.5rem] border border-white/5 shadow-xl overflow-hidden h-95 flex flex-col items-center justify-center p-6">
         {/* Aquí está la magia: w-full h-full justify-center para igualar tamaños */}
         <div className="relative z-10 flex flex-col items-center text-center p-8 bg-[#050505]/90 rounded-[2.5rem] border border-violet-500/20 backdrop-blur-xl w-full h-full justify-center shadow-2xl">
-          <div className="w-16 h-16 bg-gradient-to-br from-violet-600/20 to-cyan-600/20 rounded-2xl flex items-center justify-center mb-6 border border-white/10 shrink-0">
+          <div className="w-16 h-16 bg-linear-to-br from-violet-600/20 to-cyan-600/20 rounded-2xl flex items-center justify-center mb-6 border border-white/10 shrink-0">
             <Lock size={28} className="text-violet-400" />
           </div>
           <h3 className="text-lg font-black text-white italic mb-3 tracking-tighter uppercase text-center shrink-0">Analítica Pro</h3>
@@ -45,7 +44,7 @@ export default function ProgressionChart({
           </p>
           <Link 
             href="/pro" 
-            className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 p-4 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(139,92,246,0.3)] shrink-0"
+            className="w-full bg-linear-to-r from-violet-600 to-cyan-600 p-4 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase hover:scale-[1.02] transition-transform text-white flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(139,92,246,0.3)] shrink-0"
           >
             <Zap size={14} fill="currentColor" /> Convertirme en Pro
           </Link>
@@ -56,7 +55,7 @@ export default function ProgressionChart({
 
   // Si tiene permisos, procedemos con la UI de la gráfica
   return (
-    <section className="bg-white/[0.02] p-6 rounded-[2.5rem] border border-white/5 shadow-xl h-[380px] flex flex-col">
+    <section className="bg-white/2 p-6 rounded-[2.5rem] border border-white/5 shadow-xl h-95 flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-cyan-400 font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
           <TrendingUp size={16} /> Índice de Progresión
@@ -93,8 +92,8 @@ export default function ProgressionChart({
             <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.15em] mb-4">
               Faltan <span className="text-cyan-400">{Math.max(3 - sessionsCount, 0)} sesiones</span> para el análisis
             </p>
-            <div className="w-full max-w-[200px] h-1.5 bg-white/5 rounded-full mx-auto overflow-hidden border border-white/5">
-              <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-1000 ease-out" style={{ width: `${progressPercent}%` }} />
+            <div className="w-full max-w-50 h-1.5 bg-white/5 rounded-full mx-auto overflow-hidden border border-white/5">
+              <div className="h-full bg-linear-to-r from-cyan-600 to-cyan-400 transition-all duration-1000 ease-out" style={{ width: `${progressPercent}%` }} />
             </div>
             <p className="text-[8px] text-slate-600 font-bold mt-2 uppercase tracking-tighter">
               Baseline: {sessionsCount}/3 logs

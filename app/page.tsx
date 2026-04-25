@@ -103,32 +103,42 @@ export default function Home() {
     if (!isPro) return [];
     if (!selectedAnalysisExercise || !userId) return [];
     
-    const exerciseLogs = workouts.filter(w => 
+    const exerciseLogs = workouts.filter((w: any) => 
       w.user?.toString() === userId?.toString() && 
       w.title.includes(selectedAnalysisExercise)
     ).reverse();    
 
-    const sessionData = exerciseLogs.map(w => {
-      const weightMatch = w.title.match(/(\d+)kg/);
+    const sessionData = exerciseLogs.map((w: any) => {
+      // 1. Regex universal (atrapa kg, lbs y decimales)
+      const weightMatch = w.title.match(/(\d+(?:\.\d+)?)\s*(kg|lbs)/i);
       const repsMatch = w.title.match(/Reps:\s*(.+)/);
-      const weightVal = weightMatch ? parseInt(weightMatch[1]) : 0;
-      const repsArray = repsMatch ? repsMatch[1].split(',').map(Number) : [];
       
+      let weightVal = weightMatch ? parseFloat(weightMatch[1]) : 0;
+      const unitVal = weightMatch ? weightMatch[2].toLowerCase() : 'kg';
+
+      // 2. Normalización de libras a kilos SOLO para la gráfica
+      if (unitVal === 'lbs') {
+        weightVal = weightVal * 0.453592;
+      }
+      
+      const repsArray = repsMatch ? repsMatch[1].split(',').map(Number) : [];
       const totalReps = repsArray.reduce((a: number, b: number) => a + b, 0);      
+      
       const hypertrophyScore = (weightVal * 10) + totalReps;
       
       return { cargaEfectiva: hypertrophyScore };
-    }).filter(d => d.cargaEfectiva > 0);
+    }).filter((d: any) => d.cargaEfectiva > 0);
 
     if (sessionData.length < 2) return []; 
     
     const baseline = sessionData[0].cargaEfectiva; 
     
-    return sessionData.map((s, i) => ({
+    return sessionData.map((s: any, i: number) => ({
       session: `S${i + 1}`,
       ip: parseFloat(((s.cargaEfectiva / baseline) * 100).toFixed(1))
     }));
-  }, [workouts, selectedAnalysisExercise, userId]);
+    // 👇 AQUÍ SE ARREGLAN LAS LÍNEAS ROJAS (Agregamos isPro) 👇
+  }, [workouts, selectedAnalysisExercise, userId, isPro]);
 
   // ==========================================
   // 3. EFECTOS (useEffect)

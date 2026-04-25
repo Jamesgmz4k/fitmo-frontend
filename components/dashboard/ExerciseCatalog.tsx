@@ -17,7 +17,7 @@ export default function ExerciseCatalog({ databaseCategories, onAddExercise }: E
   };
 
   return (
-    <section className="bg-white/[0.02] p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
+    <section className="bg-white/2 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
       <h2 className="text-cyan-400 font-black mb-6 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
         <Plus size={16} /> Expandir Catálogo
       </h2>

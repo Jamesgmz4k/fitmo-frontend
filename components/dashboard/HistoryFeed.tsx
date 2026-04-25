@@ -94,8 +94,8 @@ export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDe
                   <div className="absolute inset-0 backdrop-blur-[6px] flex flex-col items-center justify-center bg-[#050505]/60 z-10 p-4 text-center">
                     <Lock size={32} className="text-violet-400 mb-3" />
                     <h3 className="text-white font-black italic text-lg uppercase tracking-tighter mb-2">Análisis de Fatiga Bloqueado</h3>
-                    <p className="text-[10px] text-slate-400 mb-4 max-w-[250px]">Descubre si es fatiga central, falta de glucógeno o sobreentrenamiento.</p>
-                    <Link href="/pro" className="bg-gradient-to-r from-violet-600 to-cyan-600 px-6 py-3 rounded-xl text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-transform shadow-lg">
+                    <p className="text-[10px] text-slate-400 mb-4 max-w-62.5">Descubre si es fatiga central, falta de glucógeno o sobreentrenamiento.</p>
+                    <Link href="/pro" className="bg-linear-to-r from-violet-600 to-cyan-600 px-6 py-3 rounded-xl text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-transform shadow-lg">
                       <Zap size={14} fill="currentColor" /> Desbloquear Análisis
                     </Link>
                   </div>
@@ -106,7 +106,7 @@ export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDe
                   </div>
                 </div>
               ) : (
-                <div className="bg-gradient-to-br from-violet-600/10 to-cyan-600/10 rounded-3xl p-6 mb-8 border border-violet-500/20">
+                <div className="bg-linear-to-br from-violet-600/10 to-cyan-600/10 rounded-3xl p-6 mb-8 border border-violet-500/20">
                    <div className="flex items-center justify-between mb-4">
                      <div className="flex items-center gap-2 text-violet-400">
                        <BarChart3 size={16} /> <span className="text-[10px] font-black uppercase tracking-widest">Motor Fitmo Pro</span>
@@ -247,7 +247,7 @@ export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDe
 
           {recentDates.length === 0 && (
             <div className="text-center py-12 border border-dashed border-cyan-500/30 rounded-[2rem] bg-cyan-500/5 flex flex-col items-center justify-center space-y-5 animate-in fade-in zoom-in duration-500">
-              <div className="bg-gradient-to-br from-violet-600/20 to-cyan-500/20 p-4 rounded-full border border-white/10">
+              <div className="bg-linear-to-br from-violet-600/20 to-cyan-500/20 p-4 rounded-full border border-white/10">
                 <Zap className="text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]" size={32} />
               </div>
               <div>
@@ -258,7 +258,7 @@ export default function HistoryFeed({ workouts = [], isPro = false, onEdit, onDe
               </div>
               <Link 
                 href="/entrenar?tutorial=true" 
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-cyan-600 px-8 py-4 rounded-full font-black text-white text-[11px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]"
+                className="inline-flex items-center gap-2 bg-linear-to-r from-violet-600 to-cyan-600 px-8 py-4 rounded-full font-black text-white text-[11px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)]"
               >
                 Registrar mi primer entrenamiento <ChevronRight size={16} />
               </Link>
