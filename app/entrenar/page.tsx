@@ -526,9 +526,11 @@ export default function EntrenarPage() {
                               {setIdx + 1}
                             </div>
 
-                            <div className="flex-1 text-center text-slate-400 text-xs font-black tracking-widest select-none">
+                            <div className="flex-1 px-2 hidden md:block select-none"> {/* Quitamos text-center aquí */}
+                            <div className="flex h-10 w-full items-center justify-center rounded-md border border-slate-300 bg-slate-100 text-sm text-slate-400 font-bold">
                               {prevText}
                             </div>
+                          </div>
 
                             <input
                               type="number"
