@@ -526,11 +526,11 @@ export default function EntrenarPage() {
                               {setIdx + 1}
                             </div>
 
-                            <div className="flex-1 px-2 hidden md:block select-none"> {/* Quitamos text-center aquí */}
-                            <div className="flex h-10 w-full items-center justify-center rounded-md border border-slate-300 bg-slate-100 text-sm text-slate-400 font-bold">
-                              {prevText}
+                            <div className="flex-1 min-w-0 px-1 text-center select-none">
+                              <span className="text-slate-500 text-[11px] md:text-xs font-bold tracking-widest truncate block">
+                                {prevText}
+                              </span>
                             </div>
-                          </div>
 
                             <input
                               type="number"
@@ -541,8 +541,6 @@ export default function EntrenarPage() {
                                 const newData = { ...workoutData };
                                 newData[idx].weights[setIdx] = val;
 
-                                // 🚀 MAGIA 5: Autocompletado en cascada
-                                // Si cambias un peso, replicamos el valor hacia abajo en los sets que faltan
                                 for (let i = setIdx + 1; i < newData[idx].weights.length; i++) {
                                   if (!newData[idx].completed[i]) {
                                     newData[idx].weights[i] = val;
@@ -550,7 +548,7 @@ export default function EntrenarPage() {
                                 }
                                 setWorkoutData(newData);
                               }}
-                              className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
+                              className={`shrink-0 w-14 md:w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
                               disabled={isCompleted}
                             />
 
@@ -562,7 +560,7 @@ export default function EntrenarPage() {
                                 newData[idx].reps[setIdx] = e.target.value;
                                 setWorkoutData(newData);
                               }}
-                              className={`w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
+                              className={`shrink-0 w-14 md:w-16 p-2 rounded-lg text-center font-black outline-none transition-colors ${isCompleted ? 'bg-transparent text-emerald-400' : 'bg-[#0a0a0a] text-white focus:border-cyan-500 border border-white/10'}`}
                               disabled={isCompleted}
                             />
 
