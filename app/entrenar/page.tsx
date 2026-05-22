@@ -248,7 +248,12 @@ export default function EntrenarPage() {
   };
 
   const getLastPerformance = (exerciseName: string) => {
-    const userLogs = workouts.filter(w => w.user?.toString() === userId?.toString() && w.title.includes(exerciseName));
+    // 🚀 FIX: Filtro más tolerante que acepta 'user' o 'user_id' y no le importan las mayúsculas
+    const userLogs = workouts.filter(w => 
+      (w.user?.toString() === userId?.toString() || w.user_id?.toString() === userId?.toString()) && 
+      w.title.toLowerCase().includes(exerciseName.toLowerCase())
+    );
+    
     if (userLogs.length === 0) return null;
 
     userLogs.sort((a, b) => b.id - a.id);
@@ -258,8 +263,9 @@ export default function EntrenarPage() {
     const w = weightMatch ? parseFloat(weightMatch[1]) : 0;
     const recordUnit = weightMatch ? weightMatch[2].toLowerCase() : 'kg';
 
-    const repsMatch = last.title.match(/Reps:\s*(.+)/);
-    const reps = repsMatch ? repsMatch[1].split(',').map((r: string) => parseInt(r.trim())) : [];
+    // 🚀 FIX: Agregada la 'i' al final del Regex para que no le importen las mayúsculas en "Reps:"
+    const repsMatch = last.title.match(/reps:\s*(.+)/i);
+    const reps = repsMatch ? repsMatch[1].split(',').map((r: string) => parseInt(r.trim())).filter((n: number) => !isNaN(n)) : [];
 
     return { weight: w, reps, recordUnit };
   };
@@ -304,12 +310,22 @@ export default function EntrenarPage() {
     setEditingTemplateId(template.id); setIsBuilding(true); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteTemplate = async (id: number) => {
+ const handleDeleteTemplate = async (id: number) => {
     if (!confirm("¿Seguro que quieres eliminar esta rutina?")) return;
-    const res = await apiClient(`/api/templates/${id}/`, { method: 'DELETE' });
-    if (res.ok) {
-      posthog.capture('workout_template_deleted', { template_id: id });
-      fetchData();
+    try {
+      // 🚀 FIX: Le enviamos el user_id para que Django sepa que tienes permiso
+      const res = await apiClient(`/api/templates/${id}/?user_id=${userId}`, { method: 'DELETE' });
+      
+      if (res.ok) {
+        posthog.capture('workout_template_deleted', { template_id: id });
+        fetchData();
+      } else {
+        // Si Django sigue sin encontrarlo, es un fantasma de la migración. Forzamos recarga.
+        alert("La rutina no se encontró en el servidor. Actualizando la base de datos...");
+        fetchData(); 
+      }
+    } catch (error) {
+      console.error("Error al borrar:", error);
     }
   };
 
